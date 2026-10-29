@@ -46,7 +46,7 @@ export default function Lyrics(props: { onClose: () => void }) {
         if (!active) return;
         return res.json();
       })
-      .then((data?: { syncedLyrics?: string; duration?: number }) => {
+      .then((data: any) => {
         if (!active || !data) return;
         const lrc = data.syncedLyrics;
         const fetchedDuration = data.duration;

@@ -43,7 +43,7 @@ export default async function(
       signal
     });
     if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-    const data = await res.json();
+    const data = (await res.json()) as any;
 
     if (!data || !('adaptiveFormats' in data) || !Array.isArray(data.adaptiveFormats)) {
       throw new Error(data?.error || 'Invalid response: adaptiveFormats missing or not an array');
@@ -57,7 +57,7 @@ export default async function(
       throw new Error('Invalid response: no audio streams found');
     }
 
-    return data;
+    return data as Invidious;
   };
 
   async function getData() {
@@ -69,7 +69,7 @@ export default async function(
         signal
       });
       if (res.ok) {
-        const data = await res.json();
+        const data = (await res.json()) as any;
         if (data && Array.isArray(data.adaptiveFormats) && data.adaptiveFormats.length > 0) {
           data.proxy = data.proxy || '';
           return data;

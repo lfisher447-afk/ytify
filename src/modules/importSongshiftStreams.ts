@@ -17,12 +17,12 @@ export default async function(e: File) {
     src = 'songshift',
   ): Promise<void | TrackItem & { src: string }> => await fetch(`${piped}/search?q=${encodeURIComponent(seed)}&filter=music_songs`)
     .then(res => res.json())
-    .then(data => {
+    .then((data: any) => {
       if ('items' in data && data.items.length > 0)
         return data.items[0];
       else throw new Error('insufficient data');
     })
-    .then((metadata) => ({
+    .then((metadata: any) => ({
       id: metadata.url.substring(9),
       title: metadata.title,
       author: metadata.uploaderName + ' - Topic',

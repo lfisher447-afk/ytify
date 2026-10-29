@@ -669,9 +669,9 @@ function getLocalCollection(collection: string) {
 
 async function getSharedCollection(id: string) {
   setListStore("isLoading", true);
-  const data = await fetch(`${location.origin}/ss/${id}`)
+  const data = (await fetch(`${location.origin}/ss/${id}`)
     .then((res) => res.json())
-    .catch(() => "");
+    .catch(() => "")) as any;
 
   if (data) {
     if (Array.isArray(data)) {

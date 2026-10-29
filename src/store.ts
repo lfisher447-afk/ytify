@@ -650,7 +650,7 @@ async function getRecommendations() {
   );
   fetch(`${store.api}/similar?title=${title}&artist=${artist}&limit=10`)
     .then((res) => res.json())
-    .then((data) =>
+    .then((data: any) =>
       addToQueue(
         data.map((item: TrackItem) => ({
           ...item,

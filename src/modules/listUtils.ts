@@ -33,7 +33,7 @@ export function shareCollection(data: TrackItem[]) {
     body: JSON.stringify(payload),
   })
     .then(res => res.json())
-    .then(res => {
+    .then((res: any) => {
       const shareUrl = location.origin + '?si=' + res.timestamp;
       const type = "text/plain";
       const blob = new Blob([shareUrl], { type });
