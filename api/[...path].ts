@@ -1,4 +1,4 @@
-import worker from "../src/backend/worker";
+import worker from "./worker.js";
 
 export default async function handler(req: any, res: any) {
   try {

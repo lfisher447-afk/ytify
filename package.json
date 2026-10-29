@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "esbuild src/backend/worker.ts --bundle --platform=node --format=esm --target=es2022 --outfile=api/worker.js && vite build",
     "preview": "vite preview"
   },
   "dependencies": {
