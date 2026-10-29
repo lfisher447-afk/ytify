@@ -26,6 +26,8 @@ const ALLOWED_ORIGINS = [
   "https://ytify.zeabur.app",
   "https://ytify-zeta.vercel.app",
   "https://ytify-legacy.vercel.app",
+  "https://ytify-three.vercel.app",
+  "http://ytify-three.vercel.app",
   "https://ytify-2nx7.onrender.com",
   "http://localhost:3000",
   "http://localhost:5173",
@@ -72,10 +74,11 @@ export default {
   ): Promise<Response> {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin");
+    const isVercel = origin && (origin.endsWith(".vercel.app") || origin.includes("vercel.app"));
     const allowedOrigin =
-      origin && ALLOWED_ORIGINS.includes(origin)
+      origin && (ALLOWED_ORIGINS.includes(origin) || isVercel)
         ? origin
-        : "https://ytify.pp.ua";
+        : (origin || "https://ytify.pp.ua");
 
     const corsHeaders: Record<string, string> = {
       "Access-Control-Allow-Origin": allowedOrigin,

@@ -37,13 +37,24 @@ class MemoryCache implements ICache {
 let youtube: Innertube | null = null;
 
 export async function getClient(): Promise<Innertube> {
-  if (!youtube)
-    youtube = await Innertube.create({
-      cache: new MemoryCache(),
-      generate_session_locally: true,
-      retrieve_player: false,
-      fetch: fetch.bind(globalThis),
-    });
+  if (!youtube) {
+    try {
+      youtube = await Innertube.create({
+        cache: new MemoryCache(),
+        generate_session_locally: true,
+        retrieve_player: false,
+        fetch: fetch.bind(globalThis),
+      });
+    } catch (err) {
+      console.error("Failed to initialize Innertube client on first attempt:", err);
+      youtube = await Innertube.create({
+        cache: new MemoryCache(),
+        generate_session_locally: true,
+        retrieve_player: false,
+        fetch: fetch.bind(globalThis),
+      });
+    }
+  }
 
   return youtube;
 }
