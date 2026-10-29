@@ -175,16 +175,16 @@ export class UserSyncDO {
     const ids = this.sql
       .exec<{ track_id: string }>("SELECT track_id FROM user_tracks")
       .toArray()
-      .map((r) => r.track_id);
-    const local = new Map(
+      .map((r: any) => r.track_id);
+    const local = new Map<string, TrackItem>(
       this.sql
         .exec<{ id: string; data: string }>("SELECT id, data FROM tracks")
         .toArray()
-        .map((r) => [r.id, parse(r.data, null as any) as TrackItem]),
+        .map((r: any) => [r.id, parse(r.data, null as any) as TrackItem]),
     );
 
     for (const id of ids) {
-      const track = local.get(id) || {
+      const track: TrackItem = local.get(id) || {
         id,
         title: "",
         duration: "",

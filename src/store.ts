@@ -139,7 +139,7 @@ const storeInit: {
   translations: Record<TranslationKeys, string> | {};
   libraryUpdated: number;
 } = {
-  api: import.meta.env.DEV ? "" : "https://api.ytify.workers.dev",
+  api: "",
   useSaavn: true,
   locale: initLocale,
   translations: {},

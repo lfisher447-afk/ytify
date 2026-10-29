@@ -1,4 +1,4 @@
-import worker from "../src/backend/worker.js";
+import worker from "../src/backend/worker";
 
 export default async function handler(req: any, res: any) {
   try {
@@ -20,12 +20,11 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    let body: Buffer | undefined;
+    let body: Uint8Array | undefined;
     if (req.method !== "GET" && req.method !== "HEAD") {
       if (req.body) {
-        body = typeof req.body === "string"
-          ? Buffer.from(req.body)
-          : Buffer.from(JSON.stringify(req.body));
+        const str = typeof req.body === "string" ? req.body : JSON.stringify(req.body);
+        body = new TextEncoder().encode(str);
       }
     }
 
@@ -52,7 +51,10 @@ export default async function handler(req: any, res: any) {
     });
 
     const arrayBuffer = await response.arrayBuffer();
-    res.send(Buffer.from(arrayBuffer));
+    const buf = (globalThis as any).Buffer
+      ? (globalThis as any).Buffer.from(arrayBuffer)
+      : new Uint8Array(arrayBuffer);
+    res.send(buf);
   } catch (error: any) {
     console.error("[Vercel Function] Error:", error);
     res.status(500).json({ error: error.message || "Internal Server Error" });

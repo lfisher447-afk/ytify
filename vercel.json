@@ -4,7 +4,7 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/(search|playlist|album|artist|channel|similar|featured|subfeed|fix-metadata|stream-gate|catalog|recommend|cron|library|sync|syncHash|hash|video-stream)(.*)",
+      "source": "/(search|search-suggestions|playlist|album|artist|channel|similar|featured|subfeed|fix-metadata|stream-gate|catalog|recommend|cron|library|sync|syncHash|hash|video-stream)(.*)",
       "destination": "/api/$1$2"
     },
     {

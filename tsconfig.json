@@ -7,7 +7,7 @@
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": ["vite/client", "node", "bun"],
+    "types": ["vite/client", "node", "@cloudflare/workers-types"],
     "noEmit": true,
     "isolatedModules": true,
     "skipLibCheck": true,
@@ -23,8 +23,8 @@
       "@utils": ["./src/utils.ts"],
       "@modules/*": ["./src/modules/*"],
       "@components/*": ["./src/components/*"],
-      "@features/*": ["./src/features/*"],
-    },
+      "@features/*": ["./src/features/*"]
+    }
   },
-  "include": ["src", "netlify", "api", "scripts"],
+  "include": ["src", "api"]
 }
