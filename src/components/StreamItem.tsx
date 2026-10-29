@@ -270,7 +270,7 @@ export default function StreamItem(
               crossOrigin="anonymous"
               onError={handleThumbnailError}
               onLoad={handleThumbnailLoad}
-              src={image}
+              src={image || undefined}
               alt={data.title}
             />
             <p className="duration">{data.duration}</p>

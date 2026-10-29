@@ -64,7 +64,12 @@ export default function HeaderNav(props: HeaderNavProps) {
 
   return (
     <>
-      <div className="header-title">{props.title}</div>
+      <div className="header-title flex items-center gap-2">
+        <span className="brand-logo text-xs font-bold tracking-wider px-2 py-0.5 rounded-full bg-red-600/20 text-red-400 border border-red-500/30 shrink-0">
+          ☆○NovaAC○☆
+        </span>
+        {props.title}
+      </div>
 
       <nav className="header-nav">
         <span

@@ -1,4 +1,14 @@
-import { Innertube, YTNodes, type Helpers } from "youtubei.js";
+import { Innertube, YTNodes, Parser, type Helpers } from "youtubei.js";
+
+// Handle/suppress unrecognized YT renderer warnings safely
+Parser.setParserErrorHandler((error: any) => {
+  if (
+    error?.classname === "OfficialCardView" ||
+    error?.message?.includes("OfficialCardView")
+  ) {
+    return;
+  }
+});
 
 interface ICache {
   cache_dir: string;

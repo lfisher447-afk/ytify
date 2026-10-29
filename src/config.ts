@@ -91,6 +91,10 @@ export let config = {
   cachingMode: "auto" as CachingMode,
   librarySections: { ...defaultLibrarySections },
   sponsorblock: false,
+  hasCompletedBoot: false,
+  hasCompletedSetup: false,
+  backupProxy: "auto" as "auto" | "omada" | "schenkel" | "kemonomimi" | "cobalt" | "custom",
+  customProxyUrl: "",
 };
 
 type AppConfig = typeof config;

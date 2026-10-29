@@ -75,29 +75,32 @@ export default function Featured() {
         `${store.api}/featured?artistIds=${encodeURIComponent(artistParam)}&limit=20`,
       );
       if (res.ok) {
-        const data = (await res.json()) as FeaturedResponse;
-        const feat = Array.isArray(data.featuredPlaylists)
-          ? data.featuredPlaylists
-          : [];
-        setFeaturedPlaylists(feat);
+        const contentType = res.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const data = (await res.json()) as FeaturedResponse;
+          const feat = Array.isArray(data.featuredPlaylists)
+            ? data.featuredPlaylists
+            : [];
+          setFeaturedPlaylists(feat);
 
-        try {
-          sessionStorage.setItem(
-            "featured_cache",
-            JSON.stringify({
-              featuredPlaylists: feat,
-              timestamp: Date.now(),
-            }),
-          );
-        } catch {}
-
-        if (Array.isArray(data.artists)) {
           try {
             sessionStorage.setItem(
-              "featured_artists",
-              JSON.stringify(data.artists),
+              "featured_cache",
+              JSON.stringify({
+                featuredPlaylists: feat,
+                timestamp: Date.now(),
+              }),
             );
           } catch {}
+
+          if (Array.isArray(data.artists)) {
+            try {
+              sessionStorage.setItem(
+                "featured_artists",
+                JSON.stringify(data.artists),
+              );
+            } catch {}
+          }
         }
       }
     } catch (e) {

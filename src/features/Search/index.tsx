@@ -7,7 +7,7 @@ import Filters from "./Filters";
 import HeaderNav from "@components/HeaderNav";
 import HeaderActions from "@components/HeaderActions";
 
-const About = lazy(() => import("./About"));
+const DiscoveryHub = lazy(() => import("./DiscoveryHub"));
 
 export default function SearchFeature() {
   const searchStore = useSearchStore();
@@ -36,7 +36,7 @@ export default function SearchFeature() {
         <Results />
       ) : (
         <Suspense fallback={null}>
-          <About />
+          <DiscoveryHub />
         </Suspense>
       )}
     </section>

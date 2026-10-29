@@ -255,6 +255,48 @@ export default {
       );
     }
 
+    // --- Video Stream Proxy (Server-Side Invidious Fetch without Browser CORS blocks) ---
+    if (path.startsWith("video-stream")) {
+      const videoId = searchParams.get("id") || path.replace(/^video-stream\/?/, "");
+      if (!videoId) {
+        return new Response(JSON.stringify({ error: "Missing video id" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+      const preferred = searchParams.get("proxy");
+      const instances = [
+        ...(preferred ? [preferred] : []),
+        "https://yt.omada.cafe",
+        "https://invidious.schenkel.eti.br",
+        "https://invidious.kemonomimi.nl",
+        "https://echostreamz.com"
+      ];
+      for (const inst of instances) {
+        try {
+          const res = await fetch(`${inst}/api/v1/videos/${videoId}`, {
+            headers: { "Accept": "application/json" },
+            signal: AbortSignal.timeout(4500)
+          });
+          if (res.ok) {
+            const data = (await res.json()) as any;
+            if (data?.adaptiveFormats?.length) {
+              return new Response(JSON.stringify({ ...data, proxy: inst }), {
+                status: 200,
+                headers: { ...corsHeaders, "Content-Type": "application/json" }
+              });
+            }
+          }
+        } catch {
+          // try next instance
+        }
+      }
+      return new Response(JSON.stringify({ error: "All streaming proxies failed" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
     // --- Featured endpoint (artist "Featured on" shelf) ---
     if (path === "featured") {
       const artistIds = (searchParams.get("artistIds") || "")

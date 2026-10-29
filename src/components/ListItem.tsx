@@ -45,7 +45,7 @@ export default function ListItem(data: YTListItem) {
       {config.loadImage && (
         <img
           ref={imgRef}
-          src={thumbnail}
+          src={thumbnail || undefined}
           onError={handleError}
           onLoad={unravel}
           alt={data.name}

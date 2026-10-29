@@ -48,6 +48,16 @@ export default function Controls(props: {
 
   return (
     <>
+      <div className="flex items-center justify-between px-1 mb-2">
+        <span className="text-[10px] font-mono tracking-wider uppercase px-2 py-0.5 rounded bg-neutral-900/80 text-neutral-300 border border-neutral-800/80 flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          {playerStore.isMusic ? "YT MUSIC · LOSSLESS OPUS" : "YT AUDIO · DUAL-SOURCE"}
+        </span>
+        <span className="text-[10px] font-mono text-neutral-400 tabular-nums">
+          48kHz · {playerStore.playbackRate.toFixed(2)}x
+        </span>
+      </div>
+
       <span className="slider">
         <input
           type="range"

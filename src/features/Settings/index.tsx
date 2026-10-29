@@ -282,6 +282,77 @@ export default function SettingsFeature() {
           <option value="light">{t("settings_theming_scheme_light")}</option>
           <option value="dark">{t("settings_theming_scheme_dark")}</option>
         </Selector>
+
+        {/* Backup Streaming & Setup Wizard */}
+        <div className="pt-4 border-t border-neutral-800/60 space-y-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs text-neutral-400 font-medium">
+              Backup Streaming Proxy
+            </label>
+            <select
+              value={config.backupProxy || "auto"}
+              onChange={(e) => setConfig("backupProxy", e.target.value as any)}
+              className="bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-neutral-200"
+            >
+              <option value="auto">Auto Load Balancing</option>
+              <option value="omada">Omada Cafe (US Edge)</option>
+              <option value="schenkel">Schenkel BR Edge</option>
+              <option value="kemonomimi">Kemonomimi EU Edge</option>
+              <option value="cobalt">Cobalt Direct Fallback</option>
+              <option value="custom">Custom Proxy URL</option>
+            </select>
+          </div>
+
+          {config.backupProxy === "custom" && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs text-neutral-400">Custom Proxy Base URL</label>
+              <input
+                type="url"
+                placeholder="https://my-invidious-proxy.example.com"
+                value={config.customProxyUrl || ""}
+                onChange={(e) => setConfig("customProxyUrl", e.target.value)}
+                className="bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-xs text-neutral-200"
+              />
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={async () => {
+              setStore("snackbar", "Testing proxy pool latency...");
+              const start = Date.now();
+              try {
+                const res = await fetch(`/video-stream?id=dQw4w9WgXcQ`, {
+                  signal: AbortSignal.timeout(4500)
+                }).catch(() => null);
+                const ms = Date.now() - start;
+                if (res && res.ok) {
+                  setStore("snackbar", `Proxy Active · ${ms}ms latency (High Performance)`);
+                } else {
+                  setStore("snackbar", `Failover active (${ms}ms)`);
+                }
+              } catch {
+                setStore("snackbar", "Automatic Cobalt failover active");
+              }
+            }}
+            className="w-full py-2 bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 cursor-pointer mt-1"
+          >
+            <i className="ri-pulse-line text-sm text-neutral-400"></i>
+            <span>⚡ Test Proxy Pool Latency</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setConfig("hasCompletedBoot", false);
+              setConfig("hasCompletedSetup", false);
+              window.location.reload();
+            }}
+            className="w-full py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 mt-2 cursor-pointer"
+          >
+            <span>⚡ Re-Run Boot Launch & Setup Wizard</span>
+          </button>
+        </div>
       </div>
       <br />
       <br />

@@ -21,7 +21,7 @@ export default function MediaArtwork() {
     <img
       ref={imgRef}
       className={cn(Boolean(playerStore.isMusic) && "is-music")}
-      src={playerStore.mediaArtwork}
+      src={playerStore.mediaArtwork || undefined}
       crossOrigin="anonymous"
       alt={"Media Artwork for " + playerStore.stream.title}
       onLoad={() => {

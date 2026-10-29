@@ -118,13 +118,15 @@ export function createStore<T extends object>(initialState: T): [
   return [proxy, setStore, useStore, subscribe] as const;
 }
 
-const nl =
+const nlRaw =
   typeof navigator !== "undefined" && navigator.language
-    ? navigator.language.slice(0, 2)
+    ? navigator.language.split("-")[0]
     : "en";
+const nl = nlRaw === "cn" ? "zh" : nlRaw;
 const hasLocales = typeof Locales !== "undefined";
+const rawConfigLang = config.language === "cn" ? "zh" : config.language;
 const initLocale =
-  config.language || (hasLocales && Locales.includes(nl) ? nl : "en");
+  rawConfigLang || (hasLocales && Locales.includes(nl) ? nl : "en");
 
 const storeInit: {
   useSaavn: boolean;
@@ -153,11 +155,16 @@ export function t(key: TranslationKeys, value: string = ""): string {
 }
 
 export async function updateLang() {
-  document.documentElement.lang = store.locale;
+  let targetLocale = store.locale === "cn" ? "zh" : store.locale;
+  document.documentElement.lang = targetLocale;
 
-  const json = await import(`./locales/${store.locale}.json`);
-
-  setStore("translations", json.default);
+  try {
+    const json = await import(`./locales/${targetLocale}.json`);
+    setStore("translations", json.default);
+  } catch {
+    const fallback = await import("./locales/en.json");
+    setStore("translations", fallback.default);
+  }
   return true;
 }
 
@@ -771,13 +778,14 @@ const DEBOUNCE_TIME = 400;
 
 function cancelPendingSuggestions() {
   clearTimeout(suggestionTimeout);
-  searchStore.suggestions.controller.abort();
+  searchStore.suggestions?.controller?.abort();
 }
 
 export function clearSuggestions() {
   cancelPendingSuggestions();
   lastQuery = "";
-  setSearchStore("suggestions", { data: [], index: -1 });
+  setSearchStore("suggestions", "data", []);
+  setSearchStore("suggestions", "index", -1);
 }
 
 export function getSearchSuggestions(text: string) {

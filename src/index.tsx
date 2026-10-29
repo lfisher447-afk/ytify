@@ -24,6 +24,8 @@ import {
 } from "@stores";
 import { handleNavClick } from "@components/HeaderNav";
 import NavBar from "@components/NavBar";
+import BootOS from "@components/BootOS";
+import { config, useConfig } from "@config";
 import { cn } from "@components/common";
 import "./styles/global.css";
 
@@ -32,6 +34,10 @@ const ActionsMenu = lazy(() => import("@components/ActionsMenu"));
 const SnackBar = lazy(() => import("@components/SnackBar"));
 
 export default function App() {
+  const currentConfig = useConfig();
+  const [showBootOS, setShowBootOS] = useState(
+    () => !currentConfig.hasCompletedBoot || !currentConfig.hasCompletedSetup
+  );
   const [isPortrait, setIsPortrait] = useState(() =>
     typeof window !== "undefined"
       ? window.matchMedia("(orientation: portrait)").matches
@@ -252,6 +258,9 @@ export default function App() {
         <Suspense fallback={null}>
           <SnackBar />
         </Suspense>
+      )}
+      {showBootOS && (
+        <BootOS onComplete={() => setShowBootOS(false)} />
       )}
     </>
   );

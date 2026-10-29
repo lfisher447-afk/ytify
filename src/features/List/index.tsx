@@ -443,7 +443,7 @@ export default function ListFeature() {
 
       {config.loadImage && listStore.id.startsWith("MPREb") && (
         <img
-          src={generateImageUrl(listStore.img, "720")}
+          src={generateImageUrl(listStore.img, "720") || undefined}
           alt={listStore.name}
           className="list-thumbnail"
         />

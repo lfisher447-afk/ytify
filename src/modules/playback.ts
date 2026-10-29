@@ -18,7 +18,6 @@ import { fetchSponsorSegments } from "@modules/sponsorBlock";
 
 export function proxyHandler(url: string, prefetch?: boolean) {
   const isVideo = Boolean(document.querySelector("video"));
-  const useProxy = isTopicAuthor(playerStore.stream.author) && !isVideo;
 
   if (!prefetch) setPlayerStore("status", t("player_audiostreams_insert"));
 
@@ -26,9 +25,11 @@ export function proxyHandler(url: string, prefetch?: boolean) {
   const origin = link.origin;
   const proxy = playerStore.proxy;
 
-  return useProxy && proxy && !url.includes("&fallback")
-    ? url.replace(origin, proxy)
-    : url;
+  if (proxy && !url.includes("&fallback") && !isVideo) {
+    return url.replace(origin, proxy);
+  }
+
+  return url;
 }
 
 export async function quickSwitch() {

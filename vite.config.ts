@@ -15,9 +15,9 @@ const pkg = JSON.parse(
 export default defineConfig(({ command }) => ({
   base: process.env.VITE_BASE_PATH || "/",
   define: {
-    Locales: readdirSync(resolve(import.meta.dirname, "./src/locales")).map(
-      (file) => file.slice(0, 2),
-    ),
+    Locales: readdirSync(resolve(import.meta.dirname, "./src/locales"))
+      .filter((file) => file.endsWith(".json"))
+      .map((file) => file.replace(/\.json$/, "")),
     Build: JSON.stringify("v" + pkg.version),
   },
   build: {
@@ -140,6 +140,7 @@ const apiMiddleware = (serve: boolean): PluginOption =>
             "catalog",
             "channel",
             "cron",
+            "featured",
             "fix-metadata",
             "gallery",
             "playlist",
@@ -153,6 +154,7 @@ const apiMiddleware = (serve: boolean): PluginOption =>
             "syncHash",
             "hash",
             "library",
+            "video-stream",
           ];
           server.middlewares.use(async (req, res, next) => {
             const url = new URL(req.url || "", "http://localhost");
