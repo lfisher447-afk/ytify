@@ -1,23 +1,20 @@
-/* @refresh reload */
-
-import {
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  Suspense,
   lazy,
-  onMount,
-  onCleanup,
-  createSignal,
-  Show,
-  Switch,
-  Match,
-} from "solid-js";
-import { render } from "solid-js/web";
+} from "react";
+import { createRoot } from "react-dom/client";
 import { syncLibrary } from "@modules/library";
 import { themer } from "@modules/theme";
 import {
   updateLang,
   setStore,
-  store,
-  navStore,
+  useAppStore,
+  useNavStore,
   setNavStore,
+  usePlayerStore,
   playerStore,
   playNext,
   playPrev,
@@ -27,30 +24,29 @@ import {
 } from "@stores";
 import { handleNavClick } from "@components/HeaderNav";
 import NavBar from "@components/NavBar";
+import { cn } from "@components/common";
 import "./styles/global.css";
-
-updateLang().then(() => {
-  themer();
-
-  render(() => <App />, document.body);
-});
 
 const MiniPlayer = lazy(() => import("@components/MiniPlayer"));
 const ActionsMenu = lazy(() => import("@components/ActionsMenu"));
 const SnackBar = lazy(() => import("@components/SnackBar"));
 
 export default function App() {
-  const [isPortrait, setIsPortrait] = createSignal(
+  const [isPortrait, setIsPortrait] = useState(() =>
     typeof window !== "undefined"
       ? window.matchMedia("(orientation: portrait)").matches
       : false,
   );
 
-  let mainRef!: HTMLElement;
-  let leftPanelRef!: HTMLDivElement;
-  let rightPanelRef!: HTMLDivElement;
+  const mainRef = useRef<HTMLElement>(null);
+  const leftPanelRef = useRef<HTMLDivElement>(null);
+  const rightPanelRef = useRef<HTMLDivElement>(null);
 
-  onMount(async () => {
+  const store = useAppStore();
+  const navStore = useNavStore();
+  const playerState = usePlayerStore();
+
+  useEffect(() => {
     if ("launchQueue" in window) {
       (window as any).launchQueue.setConsumer(() => {});
     }
@@ -59,22 +55,19 @@ export default function App() {
     const updateOrientation = (e: MediaQueryListEvent) =>
       setIsPortrait(e.matches);
     mql.addEventListener("change", updateOrientation);
-    onCleanup(() => mql.removeEventListener("change", updateOrientation));
 
     let scrollTimeout: number;
     const checkScrollCompletion = () => {
-      if (!mql.matches || !mainRef) return;
-      const scrollLeft = mainRef.scrollLeft;
-      const maxScroll = mainRef.scrollWidth - mainRef.clientWidth;
+      if (!mql.matches || !mainRef.current) return;
+      const scrollLeft = mainRef.current.scrollLeft;
+      const maxScroll =
+        mainRef.current.scrollWidth - mainRef.current.clientWidth;
 
-      // Fully scrolled to right panel (within 5px tolerance)
       if (maxScroll > 0 && scrollLeft >= maxScroll - 5) {
         if (navStore.player.state) {
           setNavStore("player", "state", false);
         }
-      }
-      // Fully scrolled to left panel (player)
-      else if (scrollLeft <= 5) {
+      } else if (scrollLeft <= 5) {
         if (!navStore.player.state) {
           setNavStore("player", "state", true);
         }
@@ -82,19 +75,15 @@ export default function App() {
     };
 
     const onScroll = () => {
-      if (!mql.matches || !mainRef) return;
-      clearTimeout(scrollTimeout);
+      if (!mql.matches || !mainRef.current) return;
+      window.clearTimeout(scrollTimeout);
       scrollTimeout = window.setTimeout(checkScrollCompletion, 60);
     };
 
-    mainRef?.addEventListener("scroll", onScroll, { passive: true });
-    mainRef?.addEventListener("scrollend", checkScrollCompletion, {
+    const mainEl = mainRef.current;
+    mainEl?.addEventListener("scroll", onScroll, { passive: true });
+    mainEl?.addEventListener("scrollend", checkScrollCompletion, {
       passive: true,
-    });
-    onCleanup(() => {
-      clearTimeout(scrollTimeout);
-      mainRef?.removeEventListener("scroll", onScroll);
-      mainRef?.removeEventListener("scrollend", checkScrollCompletion);
     });
 
     const focusSearchInput = (attempt = 0) => {
@@ -176,23 +165,27 @@ export default function App() {
     };
 
     window.addEventListener("keydown", onKeyDown);
-    onCleanup(() => {
-      window.removeEventListener("keydown", onKeyDown);
+
+    import("@modules/start.ts").then((mod) => mod.default()).then(() => {
+      if (params.has("s")) {
+        setNavStore("player", "state", true);
+        leftPanelRef.current?.scrollIntoView({ behavior: "instant" });
+      } else {
+        setNavStore("player", "state", false);
+        rightPanelRef.current?.scrollIntoView({ behavior: "instant" });
+      }
+      setStore("syncState", "synced");
+      syncLibrary("init");
     });
 
-    await import("@modules/start.ts").then((mod) => mod.default());
-
-    if (params.has("s")) {
-      setNavStore("player", "state", true);
-      leftPanelRef?.scrollIntoView({ behavior: "instant" });
-    } else {
-      setNavStore("player", "state", false);
-      rightPanelRef?.scrollIntoView({ behavior: "instant" });
-    }
-
-    setStore("syncState", "synced");
-    syncLibrary("init");
-  });
+    return () => {
+      mql.removeEventListener("change", updateOrientation);
+      window.clearTimeout(scrollTimeout);
+      mainEl?.removeEventListener("scroll", onScroll);
+      mainEl?.removeEventListener("scrollend", checkScrollCompletion);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
 
   const Queue = navStore.queue.component;
   const Search = navStore.search.component;
@@ -201,65 +194,73 @@ export default function App() {
   const Settings = navStore.settings.component;
   const Player = navStore.player.component;
 
+  const renderActiveFeature = () => {
+    switch (navStore.active) {
+      case "queue":
+        return <Queue />;
+      case "list":
+        return <List />;
+      case "settings":
+        return <Settings />;
+      case "library":
+        return <Library />;
+      case "search":
+      default:
+        return <Search />;
+    }
+  };
+
   return (
     <>
       <main
         ref={mainRef}
-        classList={{
-          "player-closed": isPortrait() && !navStore.player.state,
-        }}
+        className={cn(isPortrait && !navStore.player.state && "player-closed")}
       >
-        <div class="left-panel" ref={leftPanelRef}>
-          <Player />
+        <div className="left-panel" ref={leftPanelRef}>
+          <Suspense fallback={null}>
+            <Player />
+          </Suspense>
         </div>
-        <div class="right-panel" ref={rightPanelRef}>
-          <div class="right-panel-content">
-            <Switch>
-              <Match when={navStore.active === "queue"}>
-                <Queue />
-              </Match>
-              <Match when={navStore.active === "list"}>
-                <List />
-              </Match>
-              <Match when={navStore.active === "settings"}>
-                <Settings />
-              </Match>
-              <Match when={navStore.active === "library"}>
-                <Library />
-              </Match>
-              <Match when={navStore.active === "search" || true}>
-                <Search />
-              </Match>
-            </Switch>
+        <div className="right-panel" ref={rightPanelRef}>
+          <div className="right-panel-content">
+            <Suspense fallback={null}>{renderActiveFeature()}</Suspense>
           </div>
 
-          <Show when={isPortrait()}>
-            <Show
-              when={
-                !navStore.player.state &&
-                (playerStore.playbackState !== "none" ||
-                  Boolean(playerStore.stream.id))
-              }
-            >
-              <MiniPlayer />
-            </Show>
-            <Show
-              when={
-                navStore.active !== "list" && navStore.active !== "settings"
-              }
-            >
-              <NavBar />
-            </Show>
-          </Show>
+          {isPortrait && (
+            <>
+              {!navStore.player.state &&
+                (playerState.playbackState !== "none" ||
+                  Boolean(playerState.stream.id)) && (
+                  <Suspense fallback={null}>
+                    <MiniPlayer />
+                  </Suspense>
+                )}
+              {navStore.active !== "list" && navStore.active !== "settings" && (
+                <NavBar />
+              )}
+            </>
+          )}
         </div>
       </main>
 
-      <Show when={store.actionsMenu?.id}>
-        <ActionsMenu />
-      </Show>
-      <Show when={store.snackbar}>
-        <SnackBar />
-      </Show>
+      {store.actionsMenu?.id && (
+        <Suspense fallback={null}>
+          <ActionsMenu />
+        </Suspense>
+      )}
+      {store.snackbar && (
+        <Suspense fallback={null}>
+          <SnackBar />
+        </Suspense>
+      )}
     </>
   );
 }
+
+// Bootstrap application
+updateLang().then(() => {
+  themer();
+  const rootEl = document.getElementById("root") || document.body;
+  const root = createRoot(rootEl);
+  root.render(<App />);
+});

@@ -1,183 +1,225 @@
-import { createSignal, For, createEffect, Show } from "solid-js";
+import React, { useState, useEffect, useRef } from "react";
 import { generateImageUrl } from "@utils";
-import { config, setConfig } from "@config";
+import { useConfig, setConfig } from "@config";
 import { proxyHandler } from "@modules/playback";
-import { playerStore, playNext, setPlayerStore, t, queueStore } from "@stores";
+import {
+  usePlayerStore,
+  playNext,
+  setPlayerStore,
+  t,
+  useQueueStore,
+} from "@stores";
 
-
-export default function() {
-
-  const [data, setData] = createSignal({
-    video: [] as string[][],
-    captions: [] as Invidious['captions']
+export default function Video() {
+  const [data, setData] = useState<{
+    video: string[][];
+    captions: Invidious["captions"];
+  }>({
+    video: [],
+    captions: [],
   });
-  let video!: HTMLVideoElement;
-  let selector!: HTMLSelectElement;
 
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const selectorRef = useRef<HTMLSelectElement>(null);
+  const config = useConfig();
+  const playerStore = usePlayerStore();
+  const queueStore = useQueueStore();
 
-  const savedQ = config.watchMode || { worst: '144p', low: '240', medium: '360p', high: '720p' }[config.quality];
+  const savedQ =
+    config.watchMode ||
+    ({ worst: "144p", low: "240", medium: "360p", high: "720p" } as any)[
+      config.quality
+    ];
 
-  createEffect(async () => {
+  useEffect(() => {
+    let active = true;
     if (!playerStore.stream.id) return;
     playerStore.audio.pause();
 
-    const supportsAv1 = await navigator.mediaCapabilities
-      .decodingInfo({
-        type: 'file',
-        video: {
-          contentType: 'video/mp4; codecs="av01.0.00M.08"',
-          bitrate: 1e7,
-          framerate: 22,
-          height: 720,
-          width: 1280
+    (async () => {
+      let supportsAv1 = false;
+      if (typeof navigator !== "undefined" && navigator.mediaCapabilities) {
+        supportsAv1 = await navigator.mediaCapabilities
+          .decodingInfo({
+            type: "file",
+            video: {
+              contentType: 'video/mp4; codecs="av01.0.00M.08"',
+              bitrate: 1e7,
+              framerate: 22,
+              height: 720,
+              width: 1280,
+            },
+          })
+          .then((result) => result.supported)
+          .catch(() => false);
+      }
+
+      if (!active) return;
+
+      const d = playerStore.data as Invidious;
+      if (!d || !d.adaptiveFormats) return;
+
+      const hasAv1 =
+        d.adaptiveFormats.filter((v) => v.type?.includes("av01")).length === 4
+          ? d.adaptiveFormats.find((v) => v.type?.includes("av01"))?.url
+          : false;
+      const hasVp9 = d.adaptiveFormats.find((v) =>
+        v.type?.includes("vp9"),
+      )?.url;
+
+      if (videoRef.current) {
+        videoRef.current.currentTime = playerStore.audio.currentTime;
+      }
+
+      setData({
+        video: d.adaptiveFormats
+          .filter((f) => {
+            if (!f.type.startsWith("video")) return false;
+            const av1 = hasAv1 && supportsAv1 && f.type?.includes("av01");
+            if (av1) return true;
+            const vp9 = !hasAv1 && f.type?.includes("vp9");
+            if (vp9) return true;
+            const avc = !hasVp9 && f.type?.includes("avc1");
+            if (avc) return true;
+            return false;
+          })
+          .map((f) => [f.resolution || f.quality, f.url]),
+        captions: (d.captions || []).map((c) => ({
+          ...c,
+          url: (playerStore.proxy || "") + c.url,
+        })),
+      });
+
+      if (videoRef.current) {
+        if (videoRef.current.src) {
+          videoRef.current.src = "";
+          videoRef.current.pause();
         }
-      })
-      .then(result => result.supported);
+        delete videoRef.current.dataset.retried;
+        if (savedQ && selectorRef.current?.value) {
+          videoRef.current.src = proxyHandler(selectorRef.current.value, true);
+        }
+      }
+    })();
 
-
-    const data = playerStore.data as Invidious;
-
-    const hasAv1 = data.adaptiveFormats.filter(v => v.type?.includes('av01')).length === 4 ? data.adaptiveFormats.find(v => v.type?.includes('av01'))?.url : false;
-    const hasVp9 = data.adaptiveFormats.find(v => v.type?.includes('vp9'))?.url;
-
-    video.currentTime = playerStore.audio.currentTime;
-    setData({
-      video: data.adaptiveFormats
-        .filter(f => {
-          if (!f.type.startsWith('video')) return false;
-          const av1 = hasAv1 && supportsAv1 && f.type?.includes('av01');
-          if (av1) return true;
-          const vp9 = !hasAv1 && f.type?.includes('vp9');
-          if (vp9) return true;
-          const avc = !hasVp9 && f.type?.includes('avc1');
-          if (avc) return true;
-          return false;
-        })
-        .map(f => ([f.resolution || f.quality, f.url])),
-      captions: data.captions.map(c => ({
-        ...c,
-        url: playerStore.proxy + c.url
-      }))
-    });
-
-    if (video.src) {
-      video.src = '';
-      video.pause();
-    }
-    delete video.dataset.retried;
-    if (savedQ)
-      video.src = proxyHandler(selector.value, true);
-
-  });
+    return () => {
+      active = false;
+    };
+  }, [playerStore.stream.id]);
 
   function close() {
-    video.pause();
-    setPlayerStore('status', '');
-    setPlayerStore('isWatching', false);
+    if (videoRef.current) videoRef.current.pause();
+    setPlayerStore("status", "");
+    setPlayerStore("isWatching", false);
   }
 
   return (
-    <div class='watcher'>
+    <div className="watcher">
       <video
-        ref={video}
+        ref={videoRef}
         controls
-        crossorigin="anonymous"
-        poster={generateImageUrl(playerStore.stream.id, 'mq')}
-        onplay={() => {
-          video.currentTime = playerStore.audio.currentTime;
+        crossOrigin="anonymous"
+        poster={generateImageUrl(playerStore.stream.id, "mq")}
+        onPlay={() => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = playerStore.audio.currentTime;
+          }
           playerStore.audio.play();
         }}
-        onpause={() => {
-          if (playerStore.isWatching)
-            playerStore.audio.pause();
-          playerStore.audio.currentTime = video.currentTime;
+        onPause={() => {
+          if (playerStore.isWatching) playerStore.audio.pause();
+          if (videoRef.current) {
+            playerStore.audio.currentTime = videoRef.current.currentTime;
+          }
         }}
-        onended={() => {
+        onEnded={() => {
           if (!queueStore.list.length) {
             close();
             playNext();
           }
         }}
-        onwaiting={() => {
-          if (!playerStore.audio.paused)
-            playerStore.audio.pause();
+        onWaiting={() => {
+          if (!playerStore.audio.paused) playerStore.audio.pause();
         }}
-        ontimeupdate={() => {
-          const diff = playerStore.audio.currentTime - video.currentTime;
-          const vpr = video.playbackRate;
+        onTimeUpdate={() => {
+          if (!videoRef.current) return;
+          const diff = playerStore.audio.currentTime - videoRef.current.currentTime;
+          const vpr = videoRef.current.playbackRate;
           const npr = vpr - diff;
           if (npr < 0) return;
           const rpr = Math.round(npr * 100) / 100;
           if (rpr !== playerStore.audio.playbackRate)
             playerStore.audio.playbackRate = rpr;
-
         }}
-        onloadstart={() => {
-          video.currentTime = playerStore.audio.currentTime;
-          video.play();
+        onLoadStart={() => {
+          if (videoRef.current) {
+            videoRef.current.currentTime = playerStore.audio.currentTime;
+            videoRef.current.play();
+          }
         }}
-        onplaying={() => {
-          if (playerStore.audio.paused)
-            playerStore.audio.play();
+        onPlaying={() => {
+          if (playerStore.audio.paused) playerStore.audio.play();
         }}
-        onseeked={() => {
-          playerStore.audio.currentTime = video.currentTime;
+        onSeeked={() => {
+          if (videoRef.current) {
+            playerStore.audio.currentTime = videoRef.current.currentTime;
+          }
         }}
-        onratechange={() => {
-          playerStore.audio.playbackRate = video.playbackRate;
+        onRateChange={() => {
+          if (videoRef.current) {
+            playerStore.audio.playbackRate = videoRef.current.playbackRate;
+          }
         }}
-        onerror={async () => {
-          const oldOrigin = new URL(video.src).origin;
-          const { default: audioErrorHandler } = await import("@modules/audioErrorHandler");
-          audioErrorHandler(video);
-          if (video.dataset.retried) {
+        onError={async () => {
+          if (!videoRef.current) return;
+          const oldOrigin = new URL(videoRef.current.src).origin;
+          const { default: audioErrorHandler } = await import(
+            "@modules/audioErrorHandler"
+          );
+          audioErrorHandler(videoRef.current as any);
+          if (videoRef.current.dataset.retried) {
             const { proxy, audio } = playerStore;
             audio.src = audio.src.replace(oldOrigin, proxy);
           }
         }}
-
       >
-        <Show when={data().captions.length}>
-          <For each={data().captions}>
-            {(v) =>
-              <track
-                kind="subtitles"
-                src={v.url}
-                srclang={v.language_code}
-                label={v.label}
-              >
-              </track>
-            }
-          </For>
-        </Show>
-
+        {data.captions.map((v) => (
+          <track
+            key={v.language_code + v.label}
+            kind="subtitles"
+            src={v.url}
+            srcLang={v.language_code}
+            label={v.label}
+          />
+        ))}
       </video>
 
       <div>
-
-        <button onclick={close}>{t('close')}</button>
+        <button onClick={close}>{t("close")}</button>
 
         <select
-          ref={selector}
-          onchange={_ => {
-            video.src = proxyHandler(_.target.value, true);
-            video.currentTime = playerStore.audio.currentTime;
-            if (config.watchMode)
-              setConfig('watchMode', _.target.selectedOptions[0].textContent as string);
-          }}
-        >
-
-          <option>{t('player_video_resolution')}</option>
-          <For each={data().video}>
-            {(f) =>
-              <option value={f[1]} selected={f[0] === savedQ}>
-                {f[0]}
-              </option>
+          ref={selectorRef}
+          onChange={(e) => {
+            if (videoRef.current) {
+              videoRef.current.src = proxyHandler(e.target.value, true);
+              videoRef.current.currentTime = playerStore.audio.currentTime;
             }
-          </For>
+            if (config.watchMode)
+              setConfig(
+                "watchMode",
+                e.target.selectedOptions[0].textContent as string,
+              );
+          }}
+          defaultValue={savedQ}
+        >
+          <option>{t("player_video_resolution")}</option>
+          {data.video.map((f) => (
+            <option key={f[0]} value={f[1]}>
+              {f[0]}
+            </option>
+          ))}
         </select>
       </div>
     </div>
-
   );
 }

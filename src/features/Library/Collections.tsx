@@ -1,15 +1,27 @@
-import { createSignal, For, Show, createMemo } from "solid-js";
-import { librarySections, cachingMode, type LibrarySectionKey } from "@config";
-import { CACHED_COLLECTION, DISCOVERY_COLLECTION, fetchCollection, getCollectionsKeys, getTracksMap, RESERVED_COLLECTIONS } from "@modules/library";
-import { t, store } from "@stores";
+import React, { useState, useMemo, useRef } from "react";
+import {
+  useLibrarySections,
+  useCachingMode,
+  type LibrarySectionKey,
+} from "@config";
+import {
+  CACHED_COLLECTION,
+  DISCOVERY_COLLECTION,
+  fetchCollection,
+  getCollectionsKeys,
+  getTracksMap,
+  RESERVED_COLLECTIONS,
+} from "@modules/library";
+import { t, useAppStore } from "@stores";
 import StreamItem from "@components/StreamItem";
 
-export default function () {
-  let searchBar!: HTMLInputElement;
-  const [searchText, setSearchText] = createSignal("");
-  const [debouncedSearchText, setDebouncedSearchText] = createSignal("");
-  const [isTruncated, setIsTruncated] = createSignal(false);
-  const [searchFn, setSearchFn] = createSignal<
+export default function Collections() {
+  const store = useAppStore();
+  const searchBar = useRef<HTMLInputElement>(null);
+  const [searchText, setSearchText] = useState("");
+  const [debouncedSearchText, setDebouncedSearchText] = useState("");
+  const [isTruncated, setIsTruncated] = useState(false);
+  const [searchFn, setSearchFn] = useState<
     | ((
         searchTerm: string,
         tracksMap: Collection,
@@ -17,58 +29,55 @@ export default function () {
     | null
   >(null);
 
+  const sections = useLibrarySections();
+  const caching = useCachingMode();
+
   const loadFinder = async () => {
-    if (searchFn()) return;
+    if (searchFn) return;
     const mod = await import("@modules/finder");
     setSearchFn(() => mod.default);
   };
 
-  const tracksMap = createMemo(() => {
-    store.libraryUpdated;
+  const tracksMap = useMemo(() => {
     return getTracksMap();
-  });
+  }, [store.libraryUpdated]);
 
-  let debounceTimer: NodeJS.Timeout;
-  const handleInput = () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      setDebouncedSearchText(searchBar.value);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedSearchText(val);
     }, 300);
-    setSearchText(searchBar.value);
+    setSearchText(val);
   };
 
-  // Reserved collection names match their librarySections key, so the
-  // per-section toggles in the configure modal drive visibility directly.
   const isCollectionVisible = (item: string) => {
-    const sections = librarySections();
     return item in sections
       ? Boolean(sections[item as LibrarySectionKey])
       : true;
   };
 
-  const visibleCollections = createMemo(() => {
-    store.libraryUpdated;
+  const visibleCollections = useMemo(() => {
     return getCollectionsKeys().filter(isCollectionVisible);
-  });
+  }, [store.libraryUpdated, sections]);
 
-  const showCached = createMemo(
-    () => cachingMode() !== "off" && librarySections().cached,
-  );
+  const showCached = caching !== "off" && sections.cached;
 
-  const hasVisibleItems = createMemo(
-    () =>
-      visibleCollections().length > 0 ||
-      showCached() ||
-      librarySections().discovery,
-  );
+  const hasVisibleItems =
+    visibleCollections.length > 0 || showCached || sections.discovery;
 
-  const searchResults = createMemo(() => {
-    const finder = searchFn();
-    if (!finder) return [];
-    const { results, isTruncated } = finder(debouncedSearchText(), tracksMap());
-    setIsTruncated(isTruncated);
+  const searchResults = useMemo(() => {
+    if (!searchFn || !debouncedSearchText) return [];
+    const { results, isTruncated: truncated } = searchFn(
+      debouncedSearchText,
+      tracksMap,
+    );
+    setIsTruncated(truncated);
     return results;
-  });
+  }, [searchFn, debouncedSearchText, tracksMap]);
 
   return (
     <>
@@ -76,13 +85,15 @@ export default function () {
         ref={searchBar}
         type="text"
         placeholder={t("library_search_placeholder")}
-        onInput={handleInput}
+        onChange={handleInput}
+        value={searchText}
         onFocus={loadFinder}
       />
-      <Show when={searchText()}>
-        <For each={searchResults()}>
-          {(item) => (
+      {searchText ? (
+        <>
+          {searchResults.map((item) => (
             <StreamItem
+              key={item.id}
               id={item.id}
               title={item.title}
               author={item.author}
@@ -91,70 +102,71 @@ export default function () {
               type="video"
               context={{
                 src: "search",
-                id: searchText(),
+                id: searchText,
               }}
             />
+          ))}
+          {isTruncated && (
+            <div className="truncated-message">
+              {t("library_too_many_results")}
+            </div>
           )}
-        </For>
-        <Show when={isTruncated()}>
-          <div class="truncated-message">{t("library_too_many_results")}</div>
-        </Show>
-      </Show>
-      <Show when={!searchText()}>
-        <Show when={hasVisibleItems()} fallback={t("library_empty")}>
-          <For each={visibleCollections()}>
-            {(item) => (
-              <a
-                href={"?collection=" + item}
-                class="clxn_item"
-                onclick={(e) => {
-                  e.preventDefault();
-                  fetchCollection(item);
-                }}
-              >
-                <Show
-                  when={item in RESERVED_COLLECTIONS}
-                  fallback={
-                    <>
-                      <i class="ri-play-list-2-fill"></i>
-                      {item}
-                    </>
-                  }
-                >
-                  <i class={RESERVED_COLLECTIONS[item][0]}></i>
+        </>
+      ) : hasVisibleItems ? (
+        <>
+          {visibleCollections.map((item) => (
+            <a
+              key={item}
+              href={"?collection=" + item}
+              className="clxn_item"
+              onClick={(e) => {
+                e.preventDefault();
+                fetchCollection(item);
+              }}
+            >
+              {item in RESERVED_COLLECTIONS ? (
+                <>
+                  <i className={RESERVED_COLLECTIONS[item][0]}></i>
                   {t(RESERVED_COLLECTIONS[item][1])}
-                </Show>
-              </a>
-            )}
-          </For>
-          <Show when={showCached()}>
+                </>
+              ) : (
+                <>
+                  <i className="ri-play-list-2-fill"></i>
+                  {item}
+                </>
+              )}
+            </a>
+          ))}
+          {showCached && (
             <a
               href={"?collection=" + CACHED_COLLECTION}
-              class="clxn_item"
-              onclick={(e) => {
+              className="clxn_item"
+              onClick={(e) => {
                 e.preventDefault();
                 fetchCollection(CACHED_COLLECTION);
               }}
             >
-              <i class={RESERVED_COLLECTIONS[CACHED_COLLECTION][0]}></i>
+              <i className={RESERVED_COLLECTIONS[CACHED_COLLECTION][0]}></i>
               {t(RESERVED_COLLECTIONS[CACHED_COLLECTION][1])}
             </a>
-          </Show>
-          <Show when={librarySections().discovery}>
+          )}
+          {sections.discovery && (
             <a
               href={"?collection=" + DISCOVERY_COLLECTION}
-              class="clxn_item"
-              onclick={(e) => {
+              className="clxn_item"
+              onClick={(e) => {
                 e.preventDefault();
                 fetchCollection(DISCOVERY_COLLECTION);
               }}
             >
-              <i class={RESERVED_COLLECTIONS[DISCOVERY_COLLECTION][0]}></i>
+              <i className={RESERVED_COLLECTIONS[DISCOVERY_COLLECTION][0]}></i>
               {t(RESERVED_COLLECTIONS[DISCOVERY_COLLECTION][1])}
             </a>
-          </Show>
-        </Show>
-      </Show>
+          )}
+        </>
+      ) : (
+        <p>{t("library_empty")}</p>
+      )}
     </>
   );
 }

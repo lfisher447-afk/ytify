@@ -1,5 +1,5 @@
 import { defineConfig, PluginOption } from "vite";
-import solidPlugin from "vite-plugin-solid";
+import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import autoprefixer from "autoprefixer";
 import postcssJitProps from "postcss-jit-props";
@@ -34,7 +34,7 @@ export default defineConfig(({ command }) => ({
     },
   },
   plugins: [
-    solidPlugin(),
+    react(),
     apiMiddleware(command === "serve"),
     VitePWA({
       manifest: {

@@ -1,4 +1,4 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import React, { useState, useEffect, useRef } from "react";
 import { getCollection, getTracksMap } from "@modules/library";
 import ListItem from "@components/ListItem";
 import { t, store } from "@stores";
@@ -14,18 +14,17 @@ interface CachedFeatured {
   timestamp: number;
 }
 
-export default function () {
-  const [featuredPlaylists, setFeaturedPlaylists] = createSignal<
+export default function Featured() {
+  const [featuredPlaylists, setFeaturedPlaylists] = useState<
     YTPlaylistItem[]
   >([]);
-  const [isLoading, setIsLoading] = createSignal(false);
-  let hasAttemptedFetch = false;
+  const [isLoading, setIsLoading] = useState(false);
+  const hasAttemptedFetch = useRef(false);
 
   const updateFeatured = async () => {
-    if (hasAttemptedFetch) return;
-    hasAttemptedFetch = true;
+    if (hasAttemptedFetch.current) return;
+    hasAttemptedFetch.current = true;
 
-    // Check session storage first (valid for 30 minutes)
     try {
       const cached = sessionStorage.getItem("featured_cache");
       if (cached) {
@@ -108,49 +107,40 @@ export default function () {
     }
   };
 
-  onMount(() => {
+  useEffect(() => {
     updateFeatured();
-  });
+  }, []);
 
   return (
-    <article class="featured-article">
+    <article className="featured-article">
       <p>
-        <i class="ri-star-fill"></i>&nbsp;{t("hub_featured")}
+        <i className="ri-star-fill"></i>&nbsp;{t("hub_featured")}
       </p>
 
-      <Show
-        when={!isLoading()}
-        fallback={
-          <div class="loading-container">
-            <i class="ri-loader-3-line loading-spinner"></i>
+      {isLoading ? (
+        <div className="loading-container">
+          <i className="ri-loader-3-line loading-spinner"></i>
+        </div>
+      ) : featuredPlaylists.length > 0 ? (
+        <div className="official-shelf">
+          <div className="list-carousel">
+            {featuredPlaylists.map((item) => (
+              <ListItem
+                key={item.id}
+                name={item.name}
+                id={item.id}
+                img={item.img}
+                author={item.author || "YouTube Music"}
+                type="playlist"
+              />
+            ))}
           </div>
-        }
-      >
-        <Show
-          when={featuredPlaylists().length > 0}
-          fallback={
-            <div>
-              <p class="fallback">{t("hub_featured_fallback")}</p>
-            </div>
-          }
-        >
-          <div class="official-shelf">
-            <div class="list-carousel">
-              <For each={featuredPlaylists()}>
-                {(item) => (
-                  <ListItem
-                    name={item.name}
-                    id={item.id}
-                    img={item.img}
-                    author={item.author || "YouTube Music"}
-                    type="playlist"
-                  />
-                )}
-              </For>
-            </div>
-          </div>
-        </Show>
-      </Show>
+        </div>
+      ) : (
+        <div>
+          <p className="fallback">{t("hub_featured_fallback")}</p>
+        </div>
+      )}
     </article>
   );
 }

@@ -1,0 +1,6 @@
+{
+  "name": "ytify",
+  "description": "Efficient YouTube and YouTube Music audio streaming web app.",
+  "permissions": [],
+  "capabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

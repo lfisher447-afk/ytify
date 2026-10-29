@@ -1,65 +1,72 @@
-import { For, Show, createMemo } from "solid-js";
-import { searchStore } from "@stores";
-import { config } from "@config";
+import React, { useMemo } from "react";
+import { useSearchStore } from "@stores";
+import { useConfig } from "@config";
 import ListItem from "@components/ListItem";
 import StreamItem from "@components/StreamItem";
 
 export default function SearchResults() {
-  const isAllFilter = () => config.searchFilter === "all";
-  const carouselItems = createMemo(() =>
-    isAllFilter()
-      ? searchStore.results.filter(
-          (i) =>
-            i.type === "channel" ||
-            i.type === "artist" ||
-            i.type === "playlist",
-        )
-      : [],
+  const searchStore = useSearchStore();
+  const config = useConfig();
+
+  const isAllFilter = config.searchFilter === "all";
+
+  const carouselItems = useMemo(
+    () =>
+      isAllFilter
+        ? searchStore.results.filter(
+            (i) =>
+              i.type === "channel" ||
+              i.type === "artist" ||
+              i.type === "playlist",
+          )
+        : [],
+    [isAllFilter, searchStore.results],
   );
-  const streamResults = createMemo(() =>
-    isAllFilter()
-      ? searchStore.results.filter(
-          (i) =>
-            i.type !== "channel" &&
-            i.type !== "artist" &&
-            i.type !== "playlist",
-        )
-      : searchStore.results,
+
+  const streamResults = useMemo(
+    () =>
+      isAllFilter
+        ? searchStore.results.filter(
+            (i) =>
+              i.type !== "channel" &&
+              i.type !== "artist" &&
+              i.type !== "playlist",
+          )
+        : searchStore.results,
+    [isAllFilter, searchStore.results],
   );
 
   return (
     <>
-      <Show when={searchStore.isLoading}>
-        <i class="ri-loader-3-line loading-spinner"></i>
-      </Show>
+      {searchStore.isLoading && (
+        <i className="ri-loader-3-line loading-spinner"></i>
+      )}
 
-      <Show when={carouselItems().length > 0}>
-        <div class="list-carousel">
-          <For each={carouselItems()}>
-            {(item) => <ListItem {...(item as YTListItem)} />}
-          </For>
+      {carouselItems.length > 0 && (
+        <div className="list-carousel">
+          {carouselItems.map((item) => (
+            <ListItem key={item.id} {...(item as YTListItem)} />
+          ))}
         </div>
-      </Show>
+      )}
 
-      <div class="searchlist">
-        <For each={streamResults()}>
-          {(item) => (
-            <Show
-              when={item.type === "video" || item.type === "song"}
-              fallback={<ListItem {...(item as YTListItem)} />}
-            >
-              <StreamItem
-                {...{
-                  ...(item as YTItem),
-                  context: {
-                    src: "search",
-                    id: searchStore.query,
-                  },
-                }}
-              />
-            </Show>
-          )}
-        </For>
+      <div className="searchlist">
+        {streamResults.map((item) =>
+          item.type === "video" || item.type === "song" ? (
+            <StreamItem
+              key={item.id}
+              {...{
+                ...(item as YTItem),
+                context: {
+                  src: "search",
+                  id: searchStore.query,
+                },
+              }}
+            />
+          ) : (
+            <ListItem key={item.id} {...(item as YTListItem)} />
+          ),
+        )}
       </div>
     </>
   );

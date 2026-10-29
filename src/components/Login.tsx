@@ -1,25 +1,31 @@
+import React, { useState, useEffect, useRef } from "react";
 import { setConfig } from "@config";
 import { store, setStore, t } from "@stores";
-import { createSignal, onMount, Show } from "solid-js";
 
-export default function Login() {
-  const [email, setEmail] = createSignal("");
-  const [pw, setPw] = createSignal("");
-  const [loading, setLoading] = createSignal(false);
-  let dialogRef!: HTMLDialogElement;
+export default function Login({ onClose }: { onClose?: () => void }) {
+  const [email, setEmail] = useState("");
+  const [pw, setPw] = useState("");
+  const [loading, setLoading] = useState(false);
+  const dialogRef = useRef<HTMLDialogElement>(null);
 
-  onMount(() => {
-    dialogRef.showModal();
-  });
+  useEffect(() => {
+    dialogRef.current?.showModal();
+  }, []);
 
-  const handleSubmit = (e: Event) => {
+  const closeDialog = () => {
+    dialogRef.current?.close();
+    if (onClose) onClose();
+    else dialogRef.current?.remove();
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     fetch(`${store.api}/syncHash`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email(), password: pw() }),
+      body: JSON.stringify({ email, password: pw }),
     })
       .then(async (res) => {
         if (!res.ok) {
@@ -37,17 +43,14 @@ export default function Login() {
               setStore("snackbar", result.message);
               if (result.success) {
                 setConfig("dbsync", hash);
-                dialogRef.close();
-                dialogRef.remove();
+                closeDialog();
               } else if (
                 result.message.toLowerCase().includes("quota") ||
                 result.message.includes("429") ||
                 result.message.includes("503")
               ) {
-                // Credentials verified via syncHash; preserve login even if backend quota is temporarily busy
                 setConfig("dbsync", hash);
-                dialogRef.close();
-                dialogRef.remove();
+                closeDialog();
               } else {
                 setConfig("dbsync", "");
               }
@@ -67,39 +70,38 @@ export default function Login() {
   };
 
   return (
-    <dialog ref={dialogRef} class="displayer">
-      <form onsubmit={handleSubmit}>
+    <dialog ref={dialogRef} className="displayer">
+      <form onSubmit={handleSubmit}>
         <h4>{t("login_title")}</h4>
         <input
-          oninput={(e) => setEmail(e.target.value)}
+          onChange={(e) => setEmail(e.target.value)}
+          value={email}
           type="email"
           placeholder={t("login_email_placeholder")}
           required
-          autofocus
-          disabled={loading()}
+          autoFocus
+          disabled={loading}
         />
         <input
-          oninput={(e) => setPw(e.target.value)}
+          onChange={(e) => setPw(e.target.value)}
+          value={pw}
           type="password"
           placeholder={t("login_pw_placeholder")}
           required
-          disabled={!email() || loading()}
+          disabled={!email || loading}
         />
         <span>
-          <Show when={email() && pw()}>
-            <button type="submit" disabled={loading()}>
-              {loading() ? t("login_syncing_btn") : t("login_enable_sync")}
+          {email && pw && (
+            <button type="submit" disabled={loading}>
+              {loading ? t("login_syncing_btn") : t("login_enable_sync")}
             </button>
-          </Show>
+          )}
           <button
             type="button"
-            onclick={() => {
-              dialogRef.close();
-              dialogRef.remove();
-            }}
-            class="ri-close-large-line"
+            onClick={closeDialog}
+            className="ri-close-large-line"
             aria-label={t("login_cancel")}
-            disabled={loading()}
+            disabled={loading}
           ></button>
         </span>
       </form>

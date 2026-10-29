@@ -1,14 +1,15 @@
-import { createSignal, For, onCleanup, createEffect } from "solid-js";
+import React, { useState, useEffect, useRef } from "react";
 import { playerStore, setPlayerStore, setStore, t } from "@stores";
+import { cn } from "@components/common";
 
-export default function (props: { onClose: () => void }) {
-  const [lrcMap, setLrcMap] = createSignal<{ time?: number; text: string }[]>([
+export default function Lyrics(props: { onClose: () => void }) {
+  const [lrcMap, setLrcMap] = useState<{ time?: number; text: string }[]>([
     { text: t("loading") },
   ]);
-  const [activeLine, setActiveLine] = createSignal(-1);
-  let lyricsSection!: HTMLDivElement;
+  const [activeLine, setActiveLine] = useState(-1);
+  const lyricsSection = useRef<HTMLDivElement>(null);
 
-  createEffect(() => {
+  useEffect(() => {
     const { title, author, id } = playerStore.stream;
     if (!id) return;
     if (!author) {
@@ -20,12 +21,6 @@ export default function (props: { onClose: () => void }) {
     const controller = new AbortController();
     let active = true;
 
-    onCleanup(() => {
-      active = false;
-      controller.abort();
-      setPlayerStore("lrcSync", undefined);
-    });
-
     setLrcMap([{ text: t("loading") }]);
     setActiveLine(-1);
     setPlayerStore("lrcSync", undefined);
@@ -36,10 +31,15 @@ export default function (props: { onClose: () => void }) {
       duration: (playerStore.fullDuration ?? "").toString(),
     });
 
+    const clientHeader =
+      typeof Build !== "undefined"
+        ? `ytify ${Build} (https://github.com/n-ce/ytify)`
+        : "ytify (https://github.com/n-ce/ytify)";
+
     fetch(`https://lrclib.net/api/get?${params.toString()}`, {
       signal: controller.signal,
       headers: {
-        "Lrclib-Client": `ytify ${Build} (https://github.com/n-ce/ytify)`,
+        "Lrclib-Client": clientHeader,
       },
     })
       .then((res) => {
@@ -93,18 +93,21 @@ export default function (props: { onClose: () => void }) {
                 }
               }
 
-              if (currentIndex !== activeLine()) {
-                setActiveLine(currentIndex);
-
-                if (currentIndex < 0) return;
-
-                if (lyricsSection.children[currentIndex]) {
-                  lyricsSection.children[currentIndex].scrollIntoView({
-                    block: "center",
-                    behavior: "smooth",
-                  });
+              setActiveLine((prev) => {
+                if (currentIndex !== prev) {
+                  if (
+                    currentIndex >= 0 &&
+                    lyricsSection.current?.children[currentIndex]
+                  ) {
+                    lyricsSection.current.children[currentIndex].scrollIntoView({
+                      block: "center",
+                      behavior: "smooth",
+                    });
+                  }
+                  return currentIndex;
                 }
-              }
+                return prev;
+              });
             },
           });
         } else {
@@ -117,19 +120,21 @@ export default function (props: { onClose: () => void }) {
         setStore("snackbar", t("lyrics_failed"));
         props.onClose();
       });
-  });
 
-  onCleanup(() => {
-    setPlayerStore("lrcSync", undefined);
-  });
+    return () => {
+      active = false;
+      controller.abort();
+      setPlayerStore("lrcSync", undefined);
+    };
+  }, [playerStore.stream.id]);
 
   return (
-    <div ref={lyricsSection} class="lyrics">
-      <For each={lrcMap()}>
-        {(item, i) => (
-          <p classList={{ active: activeLine() === i() }}>{item.text}</p>
-        )}
-      </For>
+    <div ref={lyricsSection} className="lyrics">
+      {lrcMap.map((item, i) => (
+        <p key={i} className={cn(activeLine === i && "active")}>
+          {item.text}
+        </p>
+      ))}
     </div>
   );
 }

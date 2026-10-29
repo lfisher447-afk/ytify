@@ -1,62 +1,81 @@
-import { onMount, createEffect, For, createSignal, Show } from "solid-js";
+import React, { useEffect, useRef } from "react";
 import "./Settings.css";
 import { setNavStore, t, setStore, updateLang, closeSubView } from "@stores";
-import { Selector } from "@components/Selector.tsx";
-import { cachingMode, config, setConfig, setPlayerBackground, playerBackground, PanelRatio, type CachingMode, type PlayerBackground } from "@config";
-import { setCachingMode, deleteCollection, getCollection } from "@modules/library";
+import { Selector } from "@components/Selector";
+import {
+  useCachingMode,
+  useConfig,
+  setConfig,
+  setPlayerBackground,
+  usePlayerBackground,
+  PanelRatio,
+  type CachingMode,
+  type PlayerBackground,
+} from "@config";
+import {
+  setCachingMode,
+  deleteCollection,
+  getCollection,
+} from "@modules/library";
 import { quickSwitch } from "@modules/playback";
 import { themer, applyPanelRatio } from "@modules/theme";
 import Dropdown from "./Dropdown";
+import { cn } from "@components/common";
 
-export default function () {
-  let settingsSection!: HTMLDivElement;
-  const isPWA = matchMedia("(display-mode: standalone)").matches;
+export default function SettingsFeature() {
+  const settingsSection = useRef<HTMLDivElement>(null);
+  const isPWA =
+    typeof window !== "undefined" &&
+    matchMedia("(display-mode: standalone)").matches;
+  const config = useConfig();
+  const caching = useCachingMode();
+  const playerBg = usePlayerBackground();
 
-  onMount(() => {
-    setNavStore("settings", "ref", settingsSection);
-    settingsSection.scrollIntoView();
-  });
+  useEffect(() => {
+    if (settingsSection.current) {
+      setNavStore("settings", "ref", settingsSection.current);
+      settingsSection.current.scrollIntoView();
+    }
+  }, []);
 
-  createEffect(updateLang);
+  useEffect(() => {
+    updateLang();
+  }, [config.language]);
 
   const Toggle = (props: {
     name: string;
     checked: boolean;
-    onclick: (e: MouseEvent) => void;
+    onClick: (e: React.MouseEvent) => void;
   }) => {
-    const [checked, setChecked] = createSignal(props.checked);
-
     return (
       <span
         role="checkbox"
-        aria-checked={checked()}
-        tabindex="0"
-        onclick={(e) => {
-          props.onclick(e);
-          setChecked(props.checked);
-        }}
-        onkeydown={(e) => {
+        aria-checked={props.checked}
+        tabIndex={0}
+        onClick={props.onClick}
+        onKeyDown={(e) => {
           if (e.key === " " || e.key === "Enter") {
             e.preventDefault();
-            props.onclick(e as unknown as MouseEvent);
-            setChecked(!props.checked);
+            props.onClick(e as unknown as React.MouseEvent);
           }
         }}
       >
         <label>{t(props.name as TranslationKeys)}</label>
-        <i class={checked() ? "ri-toggle-fill" : "ri-toggle-line"}></i>
+        <i className={cn(props.checked ? "ri-toggle-fill" : "ri-toggle-line")}></i>
       </span>
     );
   };
 
+  const localesList = typeof Locales !== "undefined" ? Locales : ["en"];
+
   return (
-    <section ref={settingsSection} class="settingsSection">
+    <section ref={settingsSection} className="settingsSection">
       <header>
         <p>{t("nav_settings")}</p>
         <i
           aria-label={t("close")}
-          class="ri-close-large-line"
-          onclick={closeSubView}
+          className="ri-close-large-line"
+          onClick={closeSubView}
         ></i>
         <Dropdown />
       </header>
@@ -70,20 +89,27 @@ export default function () {
             setStore("locale", e.target.value);
             setStore("snackbar", t("settings_reload"));
           }}
-          value={document.documentElement.lang}
+          value={
+            typeof document !== "undefined"
+              ? document.documentElement.lang
+              : "en"
+          }
         >
-          <For each={Locales}>
-            {(item) => (
-              <option value={item}>
-                {new Intl.DisplayNames(document.documentElement.lang, {
+          {localesList.map((item) => (
+            <option key={item} value={item}>
+              {new Intl.DisplayNames(
+                typeof document !== "undefined"
+                  ? document.documentElement.lang
+                  : "en",
+                {
                   type: "language",
-                }).of(item)}
-              </option>
-            )}
-          </For>
+                },
+              ).of(item)}
+            </option>
+          ))}
         </Selector>
 
-        <Show when={isPWA}>
+        {isPWA && (
           <Selector
             id="shareAction"
             label="settings_pwa_share_action"
@@ -95,7 +121,7 @@ export default function () {
             <option value="play">{t("player_play_button")}</option>
             <option value="watch">{t("settings_pwa_watch")}</option>
           </Selector>
-        </Show>
+        )}
 
         {/* Playback Settings */}
         <Selector
@@ -119,7 +145,7 @@ export default function () {
         <Toggle
           name="settings_stable_volume"
           checked={Boolean(config.stableVolume)}
-          onclick={() => {
+          onClick={() => {
             setConfig("stableVolume", !config.stableVolume);
             quickSwitch();
           }}
@@ -128,7 +154,7 @@ export default function () {
         <Toggle
           name="settings_watchmode"
           checked={Boolean(config.watchMode)}
-          onclick={() => {
+          onClick={() => {
             setConfig("watchMode", config.watchMode ? "" : "144p");
           }}
         />
@@ -136,7 +162,7 @@ export default function () {
         <Toggle
           name="settings_sponsorblock"
           checked={Boolean(config.sponsorblock)}
-          onclick={() => {
+          onClick={() => {
             setConfig("sponsorblock", !config.sponsorblock);
           }}
         />
@@ -145,7 +171,7 @@ export default function () {
         <Toggle
           name="settings_store_history"
           checked={config.history}
-          onclick={() => {
+          onClick={() => {
             let configVal = !config.history;
             if (!configVal) {
               const db = getCollection("history") || [];
@@ -164,7 +190,7 @@ export default function () {
           label="settings_caching_mode"
           id="cachingModeSelector"
           onchange={(e) => setCachingMode(e.target.value as CachingMode)}
-          value={cachingMode()}
+          value={caching}
         >
           <option value="auto">{t("settings_caching_mode_auto")}</option>
           <option value="on-demand">
@@ -177,7 +203,7 @@ export default function () {
         <Toggle
           name="settings_link_capturing"
           checked={config.searchBarLinkCapture}
-          onclick={() => {
+          onClick={() => {
             setConfig("searchBarLinkCapture", !config.searchBarLinkCapture);
           }}
         />
@@ -185,7 +211,7 @@ export default function () {
         <Toggle
           name="settings_display_suggestions"
           checked={config.searchSuggestions}
-          onclick={() => {
+          onClick={() => {
             setConfig("searchSuggestions", !config.searchSuggestions);
             setStore("snackbar", t("settings_reload"));
           }}
@@ -194,7 +220,7 @@ export default function () {
         <Toggle
           name="settings_save_recent_searches"
           checked={config.saveRecentSearches}
-          onclick={() => {
+          onClick={() => {
             setConfig("saveRecentSearches", !config.saveRecentSearches);
           }}
         />
@@ -203,7 +229,7 @@ export default function () {
         <Toggle
           name="settings_load_images"
           checked={config.loadImage}
-          onclick={() => {
+          onClick={() => {
             setConfig("loadImage", !config.loadImage);
             setStore("snackbar", t("settings_reload"));
           }}
@@ -215,7 +241,7 @@ export default function () {
           onchange={(e) =>
             setPlayerBackground(e.target.value as PlayerBackground)
           }
-          value={playerBackground()}
+          value={playerBg}
         >
           <option value="none">{t("settings_bg_none")}</option>
           <option value="frost">{t("settings_bg_frost")}</option>
@@ -250,7 +276,7 @@ export default function () {
           }}
           value={config.theme}
         >
-          <option value="auto" selected>
+          <option value="auto">
             {t("settings_theming_scheme_system")}
           </option>
           <option value="light">{t("settings_theming_scheme_light")}</option>

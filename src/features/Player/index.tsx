@@ -1,19 +1,18 @@
-import {
-  createEffect,
-  createMemo,
-  createSignal,
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  Suspense,
   lazy,
-  onCleanup,
-  onMount,
-  Show,
-} from "solid-js";
+} from "react";
 import "./Player.css";
 import { MediaDetails } from "@components/MediaPartials";
-import { config, playerBackground, type PlayerBackground } from "@config";
+import { useConfig, usePlayerBackground, type PlayerBackground } from "@config";
 import { cssVar } from "@modules/theme";
 import {
   params,
-  playerStore,
+  usePlayerStore,
   setNavStore,
   setStore,
   t,
@@ -27,14 +26,25 @@ const Lyrics = lazy(() => import("./Lyrics"));
 const Video = lazy(() => import("./Video"));
 const Controls = lazy(() => import("./Controls"));
 
-export default function () {
-  let playerSection!: HTMLDivElement;
-  let headerRef!: HTMLElement;
-  const [showLyrics, setShowLyrics] = createSignal(false);
+export default function PlayerFeature() {
+  const playerSection = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
+  const [showLyrics, setShowLyrics] = useState(false);
+
+  const config = useConfig();
+  const playerStore = usePlayerStore();
+  const currentBackgroundSetting = usePlayerBackground();
+
+  const background = useMemo<PlayerBackground>(
+    () => (playerStore.isMusic ? currentBackgroundSetting : "none"),
+    [playerStore.isMusic, currentBackgroundSetting],
+  );
+
+  const showBg = background !== "none";
 
   function updateStaticBackgroundPosition() {
-    if (!playerSection) return;
-    const { offsetHeight, offsetWidth } = playerSection;
+    if (!playerSection.current) return;
+    const { offsetHeight, offsetWidth } = playerSection.current;
     if (offsetHeight === 0) {
       requestAnimationFrame(updateStaticBackgroundPosition);
       return;
@@ -44,51 +54,50 @@ export default function () {
     cssVar("--player-bp", `-${shift}px 0`);
   }
 
-  onMount(() => {
-    setNavStore("player", "ref", playerSection);
+  useEffect(() => {
+    if (playerSection.current) {
+      setNavStore("player", "ref", playerSection.current);
+    }
     const updateStatic = () => {
-      const current = background();
-      if (current !== "none" && !current.endsWith("-motion")) {
+      if (background !== "none" && !background.endsWith("-motion")) {
         updateStaticBackgroundPosition();
       }
     };
     updateStatic();
-    const ro = new ResizeObserver(updateStatic);
-    ro.observe(playerSection);
-    onCleanup(() => ro.disconnect());
-  });
 
-  createEffect(() => {
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined" && playerSection.current) {
+      ro = new ResizeObserver(updateStatic);
+      ro.observe(playerSection.current);
+    }
+    return () => ro?.disconnect();
+  }, [background]);
+
+  useEffect(() => {
     if (playerStore.saveProgress && playerStore.stream.id) {
       updateParam("s", playerStore.stream.id);
     } else if (!playerStore.saveProgress && params.has("s")) {
       updateParam("s");
     }
-  });
+  }, [playerStore.saveProgress, playerStore.stream.id]);
 
-  onCleanup(() => {
-    if (!playerStore.saveProgress) {
-      updateParam("s");
-    }
-  });
+  useEffect(() => {
+    return () => {
+      if (!playerStore.saveProgress) {
+        updateParam("s");
+      }
+    };
+  }, []);
 
-  // Background layers are a music-only feature, videos always stay bare.
-  const background = createMemo<PlayerBackground>(() =>
-    playerStore.isMusic ? playerBackground() : "none",
-  );
-  const showBg = () => background() !== "none";
-
-  createEffect(() => {
-    const current = background();
-    // Leaves --player-bg untouched while idle so nothing is painted per track.
-    if (current === "none") return;
+  useEffect(() => {
+    if (background === "none") return;
     cssVar("--player-bg", `url(${playerStore.mediaArtwork})`);
-    if (!current.endsWith("-motion")) {
+    if (!background.endsWith("-motion")) {
       updateStaticBackgroundPosition();
     } else {
       cssVar("--player-bp", "0 0");
     }
-  });
+  }, [background, playerStore.mediaArtwork]);
 
   function getContext() {
     const { id } = playerStore.context;
@@ -98,58 +107,60 @@ export default function () {
   return (
     <section
       id="playerSection"
-      class={`bg-${background()}`}
+      className={`bg-${background}`}
       ref={playerSection}
     >
-      <Show when={showBg()}>
-        <div class="bg-image" />
-        <div class="bg-pane" />
-      </Show>
+      {showBg && (
+        <>
+          <div className="bg-image" />
+          <div className="bg-pane" />
+        </>
+      )}
 
-      <header class="topShelf" ref={headerRef}>
+      <header className="topShelf" ref={headerRef}>
         <p>
-          <Show when={playerStore.context.src}>
-            <Show
-              when={playerStore.context.src === "queue"}
-              fallback={t("player_from", getContext())}
-            >
-              {getContext()}
-            </Show>
-          </Show>
+          {playerStore.context.src &&
+            (playerStore.context.src === "queue"
+              ? getContext()
+              : t("player_from", getContext()))}
         </p>
 
         <i
           aria-label={t("player_more")}
-          class="ri-more-2-fill"
+          className="ri-more-2-fill"
           id="moreBtn"
-          onclick={() => setStore("actionsMenu", playerStore.stream)}
+          onClick={() => setStore("actionsMenu", playerStore.stream)}
         ></i>
       </header>
 
       <article>
-        <Show when={playerStore.isWatching && !playerStore.isMusic}>
-          <Video />
-        </Show>
+        {playerStore.isWatching && !playerStore.isMusic && (
+          <Suspense fallback={null}>
+            <Video />
+          </Suspense>
+        )}
 
-        <Show when={showLyrics()}>
-          <Lyrics onClose={() => setShowLyrics(false)} />
-        </Show>
+        {showLyrics && (
+          <Suspense fallback={null}>
+            <Lyrics onClose={() => setShowLyrics(false)} />
+          </Suspense>
+        )}
 
-        <Show
-          when={
-            (!playerStore.isWatching || playerStore.isMusic) &&
-            config.loadImage &&
-            !showLyrics()
-          }
-        >
-          <MediaArtwork />
-        </Show>
+        {(!playerStore.isWatching || playerStore.isMusic) &&
+          config.loadImage &&
+          !showLyrics && (
+            <Suspense fallback={null}>
+              <MediaArtwork />
+            </Suspense>
+          )}
 
         <MediaDetails />
 
-        <Show when={!playerStore.isWatching || playerStore.isMusic}>
-          <Controls showLyrics={showLyrics} setShowLyrics={setShowLyrics} />
-        </Show>
+        {(!playerStore.isWatching || playerStore.isMusic) && (
+          <Suspense fallback={null}>
+            <Controls showLyrics={showLyrics} setShowLyrics={setShowLyrics} />
+          </Suspense>
+        )}
       </article>
     </section>
   );

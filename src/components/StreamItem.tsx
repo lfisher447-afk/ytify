@@ -1,7 +1,12 @@
-import { Accessor, Show, createSignal } from "solid-js";
+import React, { useState, useEffect, useRef } from "react";
 import "./StreamItem.css";
-import { hostResolver, generateImageUrl, isTopicAuthor, stripTopic } from "@utils";
-import { config } from "@config";
+import {
+  hostResolver,
+  generateImageUrl,
+  isTopicAuthor,
+  stripTopic,
+} from "@utils";
+import { useConfig } from "@config";
 import { removeFromCollection, getCollectionItems } from "@modules/library";
 import { player } from "@modules/playback";
 import {
@@ -16,8 +21,9 @@ import {
   setPlayerStore,
 } from "@stores";
 import { getCachedThumbnailUrl } from "@modules/audioCache";
+import { cn } from "@components/common";
 
-export default function (
+export default function StreamItem(
   data: YTItem & {
     draggable?: boolean;
     inQueue?: boolean;
@@ -26,27 +32,50 @@ export default function (
       id: string;
     };
     mark?: {
-      mode: Accessor<boolean>;
+      mode: (() => boolean) | boolean;
       set: (id: string) => void;
       get: (id: string) => boolean;
     };
     removeMode?: boolean;
   },
 ) {
-  const [getImage, setImage] = createSignal("");
+  const config = useConfig();
+  const [image, setImage] = useState("");
+  const parentRef = useRef<HTMLAnchorElement>(null);
 
-  let parent!: HTMLAnchorElement;
+  const isAlbum =
+    data.context?.id?.startsWith("MPREb") || listStore.type === "album";
+  const isFromArtist = data.context?.id?.startsWith("Artist - ");
+  const isMusic = isTopicAuthor(data.author);
+  const music =
+    data.type === "song" ||
+    data.context?.id === "favorites" ||
+    isFromArtist ||
+    (data.context?.src === "queue" && isMusic);
 
-  function handleThumbnailLoad(e: Event) {
-    const src = getImage();
+  useEffect(() => {
+    let active = true;
+    if (config.loadImage && !isAlbum) {
+      const initialUrl = generateImageUrl(data.img || data.id, "mq", music);
+      setImage(initialUrl);
+      getCachedThumbnailUrl(data.id, music).then((cached) => {
+        if (active && cached) setImage(cached);
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [data.id, data.img, config.loadImage, isAlbum, music]);
+
+  function handleThumbnailLoad(e: React.SyntheticEvent<HTMLImageElement>) {
+    const src = image;
     if (src.startsWith("blob:") || src.includes("/logo192.png")) {
-      parent.classList.remove("ravel");
+      parentRef.current?.classList.remove("ravel");
       return;
     }
 
-    const img = e.target as HTMLImageElement;
+    const img = e.currentTarget;
 
-    // YouTube returns a 120x90 image for deleted/unavailable video thumbnails on i.ytimg.com
     if (
       src.includes("i.ytimg.com") &&
       img.naturalWidth === 120 &&
@@ -62,70 +91,55 @@ export default function (
       return;
     }
 
-    parent.classList.remove("ravel");
+    parentRef.current?.classList.remove("ravel");
   }
 
   function handleThumbnailError() {
     getCachedThumbnailUrl(data.id, music).then((cached) => {
       if (cached) {
         setImage(cached);
-        parent.classList.remove("ravel");
+        parentRef.current?.classList.remove("ravel");
         return;
       }
-      const src = getImage();
-      // 1. If custom data.img failed, try the video's YouTube thumbnail via proxy
+      const src = image;
       if (data.img && src.includes(data.img) && data.id) {
         setImage(generateImageUrl(data.id, "mq", music));
         return;
       }
-      // 2. If webp via proxy failed, try jpg via proxy
       if (src.includes("vi_webp")) {
         setImage(src.replace(".webp", ".jpg").replace("vi_webp", "vi"));
         return;
       }
-      // 3. If proxy failed or jpg via proxy failed, try direct i.ytimg.com
       if (src.includes("wsrv.nl") && data.id) {
         setImage(`https://i.ytimg.com/vi/${data.id}/mqdefault.jpg`);
         return;
       }
-      // 4. Final fallback to logo
       setImage("/logo192.png");
-      parent.classList.remove("ravel");
+      parentRef.current?.classList.remove("ravel");
     });
   }
 
-  const isAlbum =
-    data.context?.id.startsWith("MPREb") || listStore.type === "album";
-  const isFromArtist = data.context?.id?.startsWith("Artist - ");
-  const isMusic = isTopicAuthor(data.author);
-  const music =
-    data.type === "song" ||
-    data.context?.id === "favorites" ||
-    isFromArtist ||
-    (data.context?.src === "queue" && isMusic);
-
-  if (config.loadImage && !isAlbum) {
-    setImage(generateImageUrl(data.img || data.id, "mq", music));
-    getCachedThumbnailUrl(data.id, music).then((cached) => {
-      if (cached) setImage(cached);
-    });
-  }
+  const isMarkMode =
+    typeof data.mark?.mode === "function"
+      ? data.mark.mode()
+      : Boolean(data.mark?.mode);
+  const isMarked = Boolean(data.mark?.get(data.id));
 
   return (
     <a
-      class="streamItem card card--interactive"
-      classList={{
-        ravel: config.loadImage && !isAlbum,
-        marked: data.mark?.get(data.id),
-        delete: data.removeMode,
-      }}
+      className={cn(
+        "streamItem card card--interactive",
+        config.loadImage && !isAlbum && "ravel",
+        isMarked && "marked",
+        data.removeMode && "delete",
+      )}
       href={hostResolver("/watch?v=" + data.id)}
-      ref={parent}
-      onclick={(e) => {
+      ref={parentRef}
+      onClick={(e) => {
         e.preventDefault();
 
         if (data.removeMode) {
-          setQueueStore("list", (list) => {
+          setQueueStore("list", (list: TrackItem[]) => {
             const index = list.findIndex(
               (item) =>
                 item.id === data.id &&
@@ -142,14 +156,18 @@ export default function (
           return;
         }
 
-        if (data.mark?.mode()) {
+        if (isMarkMode && data.mark) {
           data.mark.set(data.id);
           return;
         }
 
-        if (!e.target.classList.contains("ri-more-2-fill")) {
+        const target = e.target as HTMLElement;
+        if (!target.classList.contains("ri-more-2-fill")) {
           if (playerStore.stream.id) {
-            setQueueStore("history", (h) => [{ ...playerStore.stream }, ...h]);
+            setQueueStore("history", (h: TrackItem[]) => [
+              { ...playerStore.stream },
+              ...h,
+            ]);
           }
 
           setPlayerStore("stream", {
@@ -214,7 +232,7 @@ export default function (
 
           player(data.id);
 
-          setQueueStore("list", (list) => {
+          setQueueStore("list", (list: TrackItem[]) => {
             const index = list.findIndex(
               (item) =>
                 item.id === data.id &&
@@ -246,31 +264,34 @@ export default function (
       }}
     >
       <span>
-        <Show when={!isAlbum && config.loadImage} fallback={data.duration}>
-          <img
-            crossorigin="anonymous"
-            onerror={handleThumbnailError}
-            onload={handleThumbnailLoad}
-            src={getImage()}
-          />
-          <p class="duration">{data.duration}</p>
-        </Show>
+        {!isAlbum && config.loadImage ? (
+          <>
+            <img
+              crossOrigin="anonymous"
+              onError={handleThumbnailError}
+              onLoad={handleThumbnailLoad}
+              src={image}
+              alt={data.title}
+            />
+            <p className="duration">{data.duration}</p>
+          </>
+        ) : (
+          data.duration
+        )}
       </span>
-      <div class="metadata">
-        <p class="title">{data.title}</p>
-        <div class="avu">
-          <p class="author truncate">{stripTopic(data.author)}</p>
-          <Show when={!isAlbum}>
-            <p class="viewsXuploaded truncate">{data.subtext}</p>
-          </Show>
+      <div className="metadata">
+        <p className="title">{data.title}</p>
+        <div className="avu">
+          <p className="author truncate">{stripTopic(data.author)}</p>
+          {!isAlbum && (
+            <p className="viewsXuploaded truncate">{data.subtext}</p>
+          )}
         </div>
       </div>
-      <Show when={data.draggable}>
-        <i aria-label="Drag" class="ri-draggable"></i>
-      </Show>
-      <Show when={!data.draggable && !data.inQueue}>
-        <i aria-label="More" class="ri-more-2-fill"></i>
-      </Show>
+      {data.draggable && <i aria-label="Drag" className="ri-draggable"></i>}
+      {!data.draggable && !data.inQueue && (
+        <i aria-label="More" className="ri-more-2-fill"></i>
+      )}
     </a>
   );
 }

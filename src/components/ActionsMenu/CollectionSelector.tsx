@@ -1,10 +1,24 @@
-import { config } from "@config";
-import { addToCollection, CACHED_COLLECTION, createCollection, getCollection, getCollectionsKeys, removeFromCollection } from "@modules/library";
+import React from "react";
+import { useConfig } from "@config";
+import {
+  addToCollection,
+  CACHED_COLLECTION,
+  createCollection,
+  getCollection,
+  getCollectionsKeys,
+  removeFromCollection,
+} from "@modules/library";
 import { t } from "@stores";
-import { For, Show } from "solid-js";
 
-export default function (_: { close?: () => void; data: TrackItem[] }) {
-  const handleCollectionChange = (e: Event & { target: HTMLSelectElement }) => {
+export default function CollectionSelector(_: {
+  close?: () => void;
+  data: TrackItem[];
+}) {
+  const config = useConfig();
+
+  const handleCollectionChange = (
+    e: React.ChangeEvent<HTMLSelectElement>,
+  ) => {
     const { value } = e.target;
     const isNew = value === "+cl";
     let title: string | null | undefined;
@@ -23,7 +37,7 @@ export default function (_: { close?: () => void; data: TrackItem[] }) {
       if (title.startsWith("-cl"))
         removeFromCollection(
           value.slice(3),
-          _.data.map((_) => _.id),
+          _.data.map((item) => item.id),
         );
       else addToCollection(title, _.data);
     }
@@ -32,8 +46,6 @@ export default function (_: { close?: () => void; data: TrackItem[] }) {
     e.target.selectedIndex = 0;
   };
 
-  // The cached collection is stored under its own key, so it is offered
-  // alongside the user collections whenever caching is enabled.
   const getKeys = (add: boolean) => {
     if (!_.data || _.data.length === 0) {
       return [];
@@ -53,31 +65,39 @@ export default function (_: { close?: () => void; data: TrackItem[] }) {
   const label = (key: string) =>
     key === CACHED_COLLECTION ? t("hub_cached") : key;
 
+  const addKeys = getKeys(true);
+  const removeKeys = getKeys(false);
+
   return (
     <select
-      class="ri-play-list-add-fill"
+      className="ri-play-list-add-fill"
       id="collectionSelector"
-      onchange={handleCollectionChange}
+      onChange={handleCollectionChange}
+      defaultValue=""
       aria-label={t("collection_selector_add_to")}
     >
-      <option value="" selected disabled>
+      <option value="" disabled>
         &#xf00e;
       </option>
       <option value="+cl">{t("collection_selector_create_new")}</option>
-      <Show when={getKeys(true).length}>
+      {addKeys.length > 0 && (
         <optgroup label="Add to Collection">
-          <For each={getKeys(true)}>
-            {(v) => <option value={v}>{label(v)}</option>}
-          </For>
+          {addKeys.map((v) => (
+            <option key={v} value={v}>
+              {label(v)}
+            </option>
+          ))}
         </optgroup>
-      </Show>
-      <Show when={getKeys(false).length}>
+      )}
+      {removeKeys.length > 0 && (
         <optgroup label="Remove from Collection">
-          <For each={getKeys(false)}>
-            {(v) => <option value={"-cl" + v}>{label(v)}</option>}
-          </For>
+          {removeKeys.map((v) => (
+            <option key={v} value={"-cl" + v}>
+              {label(v)}
+            </option>
+          ))}
         </optgroup>
-      </Show>
+      )}
     </select>
   );
 }

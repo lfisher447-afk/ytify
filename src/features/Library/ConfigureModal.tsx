@@ -1,7 +1,12 @@
-import { For, onMount } from "solid-js";
-import { Portal } from "solid-js/web";
+import React, { useEffect, useRef } from "react";
+import ReactDOM from "react-dom";
 import { t } from "@stores";
-import { cachingMode, librarySections, setLibrarySection, LibrarySectionKey } from "@config";
+import {
+  useCachingMode,
+  useLibrarySections,
+  setLibrarySection,
+  LibrarySectionKey,
+} from "@config";
 
 interface SectionConfigItem {
   key: LibrarySectionKey;
@@ -24,87 +29,88 @@ const SECTIONS: SectionConfigItem[] = [
   { key: "discovery", label: "hub_discovery", icon: "ri-compass-3-fill" },
 ];
 
-/** The Cached section only exists while caching is enabled. */
-const visibleSections = () =>
-  cachingMode() === "off"
-    ? SECTIONS.filter((item) => item.key !== "cached")
-    : SECTIONS;
-
 export default function ConfigureModal(props: { close: () => void }) {
-  let dialogRef!: HTMLDialogElement;
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const sections = useLibrarySections();
+  const cachingMode = useCachingMode();
 
-  onMount(() => {
-    dialogRef?.showModal();
-  });
+  useEffect(() => {
+    dialogRef.current?.showModal();
+  }, []);
 
-  const handleBackdropClick = (e: MouseEvent) => {
-    if (!dialogRef) return;
-    const rect = dialogRef.getBoundingClientRect();
+  const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
+    if (!dialogRef.current) return;
+    const rect = dialogRef.current.getBoundingClientRect();
     const isInDialog =
       rect.top <= e.clientY &&
       e.clientY <= rect.top + rect.height &&
       rect.left <= e.clientX &&
       e.clientX <= rect.left + rect.width;
     if (!isInDialog) {
-      dialogRef.close();
+      dialogRef.current.close();
+      props.close();
     }
   };
 
-  return (
-    <Portal>
-      <dialog
-        ref={dialogRef}
-        class="displayer configure-library-modal"
-        onclick={handleBackdropClick}
-        onclose={props.close}
-      >
-        <div class="configure-modal-header">
-          <h4>{t("library_configure")}</h4>
-          <button
-            type="button"
-            class="ri-close-large-line"
-            onclick={() => {
-              dialogRef?.close();
-            }}
-            aria-label={t("close")}
-          ></button>
-        </div>
+  const visibleSections =
+    cachingMode === "off"
+      ? SECTIONS.filter((item) => item.key !== "cached")
+      : SECTIONS;
 
-        <div class="configure-modal-list">
-          <For each={visibleSections()}>
-            {(item) => {
-              const isChecked = () => librarySections()[item.key];
-              return (
-                <div
-                  class="configure-item"
-                  role="checkbox"
-                  aria-checked={isChecked()}
-                  tabindex="0"
-                  onclick={() => setLibrarySection(item.key, !isChecked())}
-                  onkeydown={(e) => {
-                    if (e.key === " " || e.key === "Enter") {
-                      e.preventDefault();
-                      setLibrarySection(item.key, !isChecked());
-                    }
-                  }}
-                >
-                  <span class="configure-item-label">
-                    <i class={item.icon}></i>
-                    {t(item.label)}
-                  </span>
-                  <i
-                    class={
-                      isChecked()
-                        ? "ri-toggle-fill toggle-on"
-                        : "ri-toggle-line toggle-off"
-                    }
-                  ></i>
-                </div>
-              );
-            }}
-          </For>
-        </div>
-      </dialog>
-    </Portal>
+  return ReactDOM.createPortal(
+    <dialog
+      ref={dialogRef}
+      className="displayer configure-library-modal"
+      onClick={handleBackdropClick}
+      onClose={props.close}
+    >
+      <div className="configure-modal-header">
+        <h4>{t("library_configure")}</h4>
+        <button
+          type="button"
+          className="ri-close-large-line"
+          onClick={() => {
+            dialogRef.current?.close();
+            props.close();
+          }}
+          aria-label={t("close")}
+        ></button>
+      </div>
+
+      <div className="configure-modal-list">
+        {visibleSections.map((item) => {
+          const isChecked = Boolean(sections[item.key]);
+          return (
+            <div
+              key={item.key}
+              className="configure-item"
+              role="checkbox"
+              aria-checked={isChecked}
+              tabIndex={0}
+              onClick={() => setLibrarySection(item.key, !isChecked)}
+              onKeyDown={(e) => {
+                if (e.key === " " || e.key === "Enter") {
+                  e.preventDefault();
+                  setLibrarySection(item.key, !isChecked);
+                }
+              }}
+            >
+              <span className="configure-item-label">
+                <i className={item.icon}></i>
+                {t(item.label)}
+              </span>
+              <i
+                className={
+                  isChecked
+                    ? "ri-toggle-fill toggle-on"
+                    : "ri-toggle-line toggle-off"
+                }
+              ></i>
+            </div>
+          );
+        })}
+      </div>
+    </dialog>,
+    document.body,
   );
 }

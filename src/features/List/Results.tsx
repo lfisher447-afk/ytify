@@ -1,21 +1,24 @@
-import { Accessor, For, Show, lazy } from "solid-js";
-import { listStore, loadAll, setListStore, t } from "@stores";
+import React, { Suspense, lazy } from "react";
+import { useListStore, loadAll, setListStore, t } from "@stores";
 import StreamItem from "@components/StreamItem";
 import { getCollection, metaUpdater, saveCollection } from "@modules/library";
 
-const SortableList = lazy(() => import("@modules/sortable"));
+const SortableList = lazy(
+  () => import("@modules/sortable"),
+) as React.ComponentType<any>;
 
-export default function Results(_: {
+export default function Results(props: {
   draggable: boolean;
   items?: TrackItem[];
   mark?: {
-    mode: Accessor<boolean>;
+    mode: (() => boolean) | boolean;
     set: (id: string) => void;
     get: (id: string) => boolean;
   };
 }) {
-  const items = () =>
-    _.items !== undefined ? _.items : (listStore.list as TrackItem[]);
+  const listStore = useListStore();
+  const items =
+    props.items !== undefined ? props.items : (listStore.list as TrackItem[]);
 
   const handleReorder = (newList: TrackItem[]) => {
     setListStore("list", newList as YTItem[]);
@@ -24,7 +27,6 @@ export default function Results(_: {
       const collectionId = listStore.id;
       const fullCollection = getCollection(collectionId);
 
-      // Since we load from the beginning, newList represents the start of the collection
       const newIds = newList.map((i) => i.id);
       const remainingIds = fullCollection.slice(newList.length);
 
@@ -33,35 +35,16 @@ export default function Results(_: {
     }
   };
 
+  if (listStore.isLoading) {
+    return <i className="ri-loader-3-line loading-spinner"></i>;
+  }
+
   return (
-    <Show
-      when={!listStore.isLoading}
-      fallback={<i class="ri-loader-3-line loading-spinner"></i>}
-    >
-      <div class="listContainer">
-        <Show
-          when={_.draggable}
-          fallback={
-            <For each={items()}>
-              {(item) => (
-                <StreamItem
-                  {...{
-                    ...item,
-                    type: "video",
-                    context: {
-                      id: listStore.name || listStore.id,
-                      src: listStore.type as Context,
-                    },
-                  }}
-                  draggable={false}
-                  mark={_.mark}
-                />
-              )}
-            </For>
-          }
-        >
+    <div className="listContainer">
+      {props.draggable ? (
+        <Suspense fallback={null}>
           <SortableList
-            items={items()}
+            items={items}
             setItems={handleReorder}
             idField="id"
             animation={150}
@@ -69,6 +52,7 @@ export default function Results(_: {
           >
             {(item: TrackItem) => (
               <StreamItem
+                key={item.id}
                 {...{
                   ...item,
                   type: "video",
@@ -78,19 +62,33 @@ export default function Results(_: {
                   },
                 }}
                 draggable={true}
-                mark={_.mark}
+                mark={props.mark}
               />
             )}
           </SortableList>
-        </Show>
-        <Show
-          when={listStore.type === "playlists" && listStore.hasContinuation}
-        >
-          <button class="loadAllBtn" onclick={loadAll}>
-            {t("list_load_all")}
-          </button>
-        </Show>
-      </div>
-    </Show>
+        </Suspense>
+      ) : (
+        items.map((item) => (
+          <StreamItem
+            key={item.id}
+            {...{
+              ...item,
+              type: "video",
+              context: {
+                id: listStore.name || listStore.id,
+                src: listStore.type as Context,
+              },
+            }}
+            draggable={false}
+            mark={props.mark}
+          />
+        ))
+      )}
+      {listStore.type === "playlists" && listStore.hasContinuation && (
+        <button className="loadAllBtn" onClick={loadAll}>
+          {t("list_load_all")}
+        </button>
+      )}
+    </div>
   );
 }

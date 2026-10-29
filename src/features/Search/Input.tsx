@@ -1,27 +1,30 @@
-import { For, onMount, Show } from "solid-js";
+import React, { useEffect, useRef } from "react";
 import {
   clearSuggestions,
   getSearchResults,
   getSearchSuggestions,
   playerStore,
-  searchStore,
+  useSearchStore,
   setSearchStore,
   t,
 } from "@stores";
 import { idFromURL } from "@utils";
-import { config, drawer } from "@config";
+import { useConfig, drawer } from "@config";
 import { player } from "@modules/playback";
+import { cn } from "@components/common";
 
-export default function () {
-  let superInput!: HTMLInputElement;
-  let blurTimeout: ReturnType<typeof setTimeout> | undefined;
+export default function Input() {
+  const searchStore = useSearchStore();
+  const config = useConfig();
+  const superInput = useRef<HTMLInputElement>(null);
+  const blurTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  onMount(() => {
+  useEffect(() => {
     getSearchResults();
-  });
+  }, []);
 
   function textToSearch(text: string) {
-    superInput.blur();
+    superInput.current?.blur();
     clearSuggestions();
     setSearchStore("page", 1);
     setSearchStore("results", []);
@@ -36,9 +39,9 @@ export default function () {
         placeholder={t("search_placeholder")}
         type="search"
         ref={superInput}
-        class="superInput"
-        autocomplete="off"
-        onpaste={async (e) => {
+        className="superInput"
+        autoComplete="off"
+        onPaste={async (e) => {
           const pastedText = e.clipboardData?.getData("text");
           const id = idFromURL(pastedText || "");
           const separators = ["\n", " ", ","];
@@ -53,7 +56,7 @@ export default function () {
               ?.split(isBulk)
               .map(idFromURL)
               .filter((s) => s?.length === 11);
-            superInput.value = "";
+            if (superInput.current) superInput.current.value = "";
             if (array?.length)
               await import("@modules/bulkCapture").then((mod) =>
                 mod.default(array as string[]),
@@ -61,19 +64,17 @@ export default function () {
             return;
           }
 
-          if (id !== playerStore.stream.id) {
+          if (id && id !== playerStore.stream.id) {
             player(id);
             return;
           }
         }}
-        onblur={() => {
-          // Deferred so a mousedown on a suggestion still lands, but cancelled by
-          // onfocus so refocusing cannot be wiped by a stale timer.
-          clearTimeout(blurTimeout);
-          blurTimeout = setTimeout(clearSuggestions, 150);
+        onBlur={() => {
+          clearTimeout(blurTimeout.current);
+          blurTimeout.current = setTimeout(clearSuggestions, 150);
         }}
-        onfocus={() => {
-          clearTimeout(blurTimeout);
+        onFocus={() => {
+          clearTimeout(blurTimeout.current);
           if (searchStore.query) return;
           setSearchStore(
             "suggestions",
@@ -81,7 +82,7 @@ export default function () {
             [...drawer.recentSearches].reverse(),
           );
         }}
-        oninput={async (e) => {
+        onChange={(e) => {
           const { value } = e.target;
           setSearchStore("query", value);
 
@@ -97,12 +98,12 @@ export default function () {
 
           getSearchSuggestions(value);
         }}
-        onkeydown={(e) => {
+        onKeyDown={(e) => {
           const { data, index } = searchStore.suggestions;
 
           if (e.key === "Enter") {
             e.preventDefault();
-            textToSearch(data[index] || superInput.value);
+            textToSearch(data[index] || superInput.current?.value || "");
             return;
           }
 
@@ -127,32 +128,25 @@ export default function () {
             ?.scrollIntoView({ behavior: "smooth", block: "center" });
         }}
       />
-      <Show
-        when={
-          config.searchSuggestions && searchStore.suggestions.data.length > 0
-        }
-      >
-        <ul class="suggestions">
-          <For each={searchStore.suggestions.data}>
-            {(item, index) => (
-              <li
-                classList={{
-                  hover: index() === searchStore.suggestions.index,
-                }}
-                onmousedown={(e) => {
-                  e.preventDefault();
-                  textToSearch(item);
-                }}
-                onclick={() => {
-                  textToSearch(item);
-                }}
-              >
-                {item}
-              </li>
-            )}
-          </For>
+      {config.searchSuggestions && searchStore.suggestions.data.length > 0 && (
+        <ul className="suggestions">
+          {searchStore.suggestions.data.map((item, index) => (
+            <li
+              key={index}
+              className={cn(index === searchStore.suggestions.index && "hover")}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                textToSearch(item);
+              }}
+              onClick={() => {
+                textToSearch(item);
+              }}
+            >
+              {item}
+            </li>
+          ))}
         </ul>
-      </Show>
+      )}
     </>
   );
 }

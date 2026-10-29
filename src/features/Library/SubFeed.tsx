@@ -1,15 +1,16 @@
-import { For, Show, createSignal, onMount } from "solid-js";
+import React, { useState, useEffect } from "react";
 import { getLists } from "@modules/library";
 import StreamItem from "@components/StreamItem";
 import ListItem from "@components/ListItem";
-import { t, store } from "@stores";
+import { t, store, useAppStore } from "@stores";
 
-export default function () {
+export default function SubFeed() {
+  const appStore = useAppStore();
   const channels = getLists("channels");
-  const [isSubfeedLoading, setIsSubfeedLoading] = createSignal(
+  const [isSubfeedLoading, setIsSubfeedLoading] = useState(
     Boolean(channels && channels.length > 0),
   );
-  const [subfeed, setSubfeed] = createSignal<YTItem[]>([]);
+  const [subfeed, setSubfeed] = useState<YTItem[]>([]);
 
   const updateSubfeed = async () => {
     if (!channels || channels.length === 0) {
@@ -29,53 +30,48 @@ export default function () {
     }
   };
 
-  onMount(() => {
-    if (subfeed().length === 0) {
+  useEffect(() => {
+    if (subfeed.length === 0) {
       updateSubfeed();
     }
-  });
+  }, [appStore.libraryUpdated]);
 
   return (
-    <article class="subfeed-article">
+    <article className="subfeed-article">
       <p>
-        <i class="ri-tv-fill"></i>&nbsp;{t("hub_subfeed")}
+        <i className="ri-tv-fill"></i>&nbsp;{t("hub_subfeed")}
       </p>
-      <Show
-        when={channels && channels.length > 0}
-        fallback={
-          <div>
-            <p class="fallback">{t("hub_subfeed_fallback")}</p>
-          </div>
-        }
-      >
-        <div class="list-carousel">
-          <For each={channels}>
-            {(channel) => (
+      {channels && channels.length > 0 ? (
+        <>
+          <div className="list-carousel">
+            {channels.map((channel) => (
               <ListItem
+                key={channel.id}
                 name={channel.name}
                 img={channel.img}
                 id={channel.id}
                 type="channel"
               />
-            )}
-          </For>
-        </div>
-
-        <Show when={isSubfeedLoading() || subfeed().length > 0}>
-          <div class="subfeed-list">
-            <Show
-              when={!isSubfeedLoading()}
-              fallback={
-                <div class="loading-container">
-                  <i class="ri-loader-3-line loading-spinner"></i>
-                </div>
-              }
-            >
-              <For each={subfeed()}>{(item) => <StreamItem {...item} />}</For>
-            </Show>
+            ))}
           </div>
-        </Show>
-      </Show>
+
+          {(isSubfeedLoading || subfeed.length > 0) && (
+            <div className="subfeed-list">
+              {isSubfeedLoading ? (
+                <div className="loading-container">
+                  <i className="ri-loader-3-line loading-spinner"></i>
+                </div>
+              ) : (
+                subfeed.map((item) => <StreamItem key={item.id} {...item} />)
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <div>
+          <p className="fallback">{t("hub_subfeed_fallback")}</p>
+        </div>
+      )}
     </article>
   );
 }

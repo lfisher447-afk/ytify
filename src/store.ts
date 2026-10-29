@@ -1,5 +1,4 @@
-import { Component, createRoot, lazy } from "solid-js";
-import { createStore } from "solid-js/store";
+import React, { lazy, useSyncExternalStore } from "react";
 import {
   shuffle,
   convertSStoHHMMSS,
@@ -10,11 +9,114 @@ import {
   pickImage,
   withTopicSuffix,
 } from "@utils";
-import { config, playerBackground, setConfig, VOLUME_PRESETS, drawer, setDrawer } from "@config";
-import { addToCollection, recordTrackPlay, cacheTrackOnFinished, getLibraryAlbums } from "@modules/library";
+import {
+  config,
+  playerBackground,
+  setConfig,
+  VOLUME_PRESETS,
+  drawer,
+  setDrawer,
+} from "@config";
+import {
+  addToCollection,
+  recordTrackPlay,
+  cacheTrackOnFinished,
+  getLibraryAlbums,
+} from "@modules/library";
 import { player } from "@modules/playback";
 import { cssVar, themer } from "@modules/theme";
-import { checkSponsorBlock, clearSponsorSegments } from "@modules/sponsorBlock";
+import {
+  checkSponsorBlock,
+  clearSponsorSegments,
+} from "@modules/sponsorBlock";
+
+export type SetStoreFunction<T> = {
+  <K extends keyof T>(key: K, value: T[K] | ((prev: T[K]) => T[K])): void;
+  <K1 extends keyof T, K2 extends keyof T[K1]>(
+    k1: K1,
+    k2: K2,
+    value: T[K1][K2] | ((prev: T[K1][K2]) => T[K1][K2]),
+  ): void;
+  (fn: (prev: T) => T): void;
+  (value: Partial<T>): void;
+  (...args: any[]): void;
+};
+
+export function createStore<T extends object>(initialState: T): [
+  T,
+  SetStoreFunction<T>,
+  () => T,
+  (listener: () => void) => () => void,
+] {
+  let state = { ...initialState };
+  let version = 0;
+  const listeners = new Set<() => void>();
+
+  const notify = () => {
+    version++;
+    listeners.forEach((l) => l());
+  };
+
+  const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  };
+
+  const setStore: SetStoreFunction<T> = (...args: any[]) => {
+    if (args.length === 1) {
+      if (typeof args[0] === "function") {
+        state = args[0](state);
+      } else if (typeof args[0] === "object" && args[0] !== null) {
+        state = { ...state, ...args[0] };
+      }
+    } else if (args.length === 2) {
+      const [key, val] = args;
+      const current = (state as any)[key];
+      const next = typeof val === "function" ? val(current) : val;
+      state = { ...state, [key]: next };
+    } else if (args.length === 3) {
+      const [k1, k2, val] = args;
+      const currentParent = (state as any)[k1] || {};
+      const currentChild = currentParent[k2];
+      const nextChild = typeof val === "function" ? val(currentChild) : val;
+      state = {
+        ...state,
+        [k1]: {
+          ...currentParent,
+          [k2]: nextChild,
+        },
+      };
+    }
+    notify();
+  };
+
+  const proxy = new Proxy({} as T, {
+    get(_, prop) {
+      return (state as any)[prop];
+    },
+    set(_, prop, val) {
+      (state as any)[prop] = val;
+      notify();
+      return true;
+    },
+    has(_, prop) {
+      return prop in state;
+    },
+    ownKeys() {
+      return Reflect.ownKeys(state);
+    },
+    getOwnPropertyDescriptor(_, prop) {
+      return Reflect.getOwnPropertyDescriptor(state, prop);
+    },
+  });
+
+  const useStore = () => {
+    useSyncExternalStore(subscribe, () => version);
+    return proxy;
+  };
+
+  return [proxy, setStore, useStore, subscribe] as const;
+}
 
 const nl =
   typeof navigator !== "undefined" && navigator.language
@@ -42,7 +144,7 @@ const storeInit: {
   libraryUpdated: 0,
 };
 
-export const [store, setStore] = createStore(storeInit);
+export const [store, setStore, useAppStore] = createStore(storeInit);
 
 export function t(key: TranslationKeys, value: string = ""): string {
   const translations = store.translations as Record<TranslationKeys, string>;
@@ -76,17 +178,17 @@ type SidePanel = "player";
 type Nav = {
   [key in MainFeature]: {
     ref: HTMLElement | null;
-    component: Component<any>;
+    component: React.ComponentType<any>;
   };
 } & {
   [key in SidePanel]: {
     ref: HTMLElement | null;
     state: boolean;
-    component: Component<any>;
+    component: React.ComponentType<any>;
   };
 };
 
-export const [navStore, setNavStore] = createStore<
+export const [navStore, setNavStore, useNavStore] = createStore<
   Nav & { active: MainFeature }
 >({
   active: "search",
@@ -299,7 +401,7 @@ const createPlayerInitialState = (): PlayerStore => ({
   proxy: "",
 });
 
-export const [playerStore, setPlayerStore] = createStore(
+export const [playerStore, setPlayerStore, usePlayerStore] = createStore(
   createPlayerInitialState(),
 );
 
@@ -327,6 +429,7 @@ export function playNext() {
   });
   player(nextStream.id);
 }
+
 export function playPrev() {
   const { stream } = playerStore;
   const { history } = queueStore;
@@ -344,6 +447,7 @@ export function playPrev() {
   });
   player(prevStream.id);
 }
+
 export function setVolume(volume: number) {
   const vol = clamp(volume, 0, 1);
   playerStore.audio.volume = vol;
@@ -372,164 +476,164 @@ export function toggleMute() {
   }
 }
 
-createRoot(() => {
-  let historyID: string | undefined = "";
-  let historyTimeoutId = 0;
-  let playCountedForTrackId = "";
+// Initialize audio player events
+let historyID: string | undefined = "";
+let historyTimeoutId = 0;
+let playCountedForTrackId = "";
 
-  if (typeof navigator !== "undefined" && "mediaSession" in navigator)
-    import("@modules/mediaSession").then((m) => m.initMediaSession());
+if (typeof navigator !== "undefined" && "mediaSession" in navigator)
+  import("@modules/mediaSession").then((m) => m.initMediaSession());
 
-  playerStore.audio.volume = playerStore.volume;
+playerStore.audio.volume = playerStore.volume;
 
-  playerStore.audio.onended = () => {
-    cacheTrackOnFinished(playerStore.stream);
-    if (queueStore.list.length) playNext();
-    else {
-      updateParam("s");
-      updateParam("t");
-      setPlayerStore("saveProgress", false);
-      setPlayerStore("playbackState", "none");
-      clearSponsorSegments();
-      if (typeof navigator !== "undefined" && "mediaSession" in navigator)
-        import("@modules/mediaSession").then((m) =>
-          m.updateMediaSessionPlaybackState("none"),
-        );
-    }
-  };
-
-  playerStore.audio.onplaying = () => {
-    setPlayerStore("playbackState", "playing");
-    if (typeof navigator !== "undefined" && "mediaSession" in navigator)
-      import("@modules/mediaSession").then((m) => {
-        m.updateMediaSessionPlaybackState("playing");
-        m.updateMediaSessionPosition();
-      });
-
-    const { stream } = playerStore;
-    const { id } = stream;
-
-    if (id && playCountedForTrackId !== id) {
-      clearTimeout(historyTimeoutId);
-      historyTimeoutId = setTimeout(() => {
-        if (historyID === id && playCountedForTrackId !== id) {
-          playCountedForTrackId = id;
-          recordTrackPlay(playerStore.stream);
-
-          if (config.similarContent && playerStore.isMusic)
-            getRecommendations();
-
-          if (config.history) {
-            addToCollection("history", [playerStore.stream]);
-          }
-        }
-      }, 1e4) as unknown as number;
-    }
-  };
-
-  playerStore.audio.onpause = () => {
-    setPlayerStore("playbackState", "paused");
-    if (typeof navigator !== "undefined" && "mediaSession" in navigator)
-      import("@modules/mediaSession").then((m) => {
-        m.updateMediaSessionPlaybackState("paused");
-        m.updateMediaSessionPosition();
-      });
-    clearTimeout(historyTimeoutId);
-  };
-  if (typeof playerStore.audio.addEventListener === "function") {
-    playerStore.audio.addEventListener("loadeddata", themer);
-  }
-
-  let isPlayable = false;
-  const playableCheckerID = setInterval(() => {
-    if (
-      queueStore.history.length ||
-      params.has("url") ||
-      params.has("text") ||
-      !params.has("s")
-    ) {
-      isPlayable = true;
-      clearInterval(playableCheckerID);
-    }
-  }, 500);
-
-  playerStore.audio.onloadstart = () => {
-    setPlayerStore("playbackState", "paused");
-    setPlayerStore("status", "");
-    if (isPlayable) playerStore.audio.play();
-
-    historyID = playerStore.stream.id;
-    playCountedForTrackId = "";
-    clearTimeout(historyTimeoutId);
-    playerStore.audio.playbackRate = playerStore.playbackRate;
-  };
-
-  playerStore.audio.onwaiting = () => {
-    setPlayerStore("playbackState", "loading");
-  };
-
-  playerStore.audio.ontimeupdate = () => {
-    if (
-      typeof document !== "undefined" &&
-      document.activeElement?.matches('input[type="range"]')
-    )
-      return;
-
-    const { audio, lrcSync, fullDuration, isMusic } = playerStore;
-
-    // Lyrics
-    if (lrcSync) lrcSync(audio.currentTime);
-
-    const seconds = Math.floor(audio.currentTime);
-
-    setPlayerStore("currentTime", seconds);
-    checkSponsorBlock(audio.currentTime);
-
-    // Artwork background pans with the progress, motion backgrounds only.
-    if (isMusic && playerBackground().endsWith("-motion") && fullDuration > 0) {
-      const { ref } = navStore.player;
-      if (ref) {
-        const diff = ref.offsetHeight - ref.offsetWidth;
-        const shift = Math.floor((seconds / fullDuration) * diff);
-        cssVar("--player-bp", `-${shift}px 0`);
-      }
-    }
-
-    const t = params.get("t");
-
-    if (t) {
-      if (isMusic) {
-        updateParam("t");
-        if (playerStore.saveProgress) {
-          setPlayerStore("saveProgress", false);
-          updateParam("s");
-        }
-      } else {
-        if (seconds % 5 === 0) {
-          const str = seconds.toString();
-          if (t !== str) updateParam("t", str);
-        }
-      }
-    }
-  };
-
-  playerStore.audio.onloadedmetadata = () => {
-    setPlayerStore({
-      currentTime: 0,
-      fullDuration: Math.floor(playerStore.audio.duration || 0),
-    });
-
+playerStore.audio.onended = () => {
+  cacheTrackOnFinished(playerStore.stream);
+  if (queueStore.list.length) playNext();
+  else {
+    updateParam("s");
+    updateParam("t");
+    setPlayerStore("saveProgress", false);
+    setPlayerStore("playbackState", "none");
+    clearSponsorSegments();
     if (typeof navigator !== "undefined" && "mediaSession" in navigator)
       import("@modules/mediaSession").then((m) =>
-        m.updateMediaSessionPosition(),
+        m.updateMediaSessionPlaybackState("none"),
       );
-  };
+  }
+};
 
-  playerStore.audio.onerror = () =>
-    import("@modules/audioErrorHandler").then((mod) =>
-      mod.default(playerStore.audio),
+playerStore.audio.onplaying = () => {
+  setPlayerStore("playbackState", "playing");
+  if (typeof navigator !== "undefined" && "mediaSession" in navigator)
+    import("@modules/mediaSession").then((m) => {
+      m.updateMediaSessionPlaybackState("playing");
+      m.updateMediaSessionPosition();
+    });
+
+  const { stream } = playerStore;
+  const { id } = stream;
+
+  if (id && playCountedForTrackId !== id) {
+    clearTimeout(historyTimeoutId);
+    historyTimeoutId = setTimeout(() => {
+      if (historyID === id && playCountedForTrackId !== id) {
+        playCountedForTrackId = id;
+        recordTrackPlay(playerStore.stream);
+
+        if (config.similarContent && playerStore.isMusic)
+          getRecommendations();
+
+        if (config.history) {
+          addToCollection("history", [playerStore.stream]);
+        }
+      }
+    }, 1e4) as unknown as number;
+  }
+};
+
+playerStore.audio.onpause = () => {
+  setPlayerStore("playbackState", "paused");
+  if (typeof navigator !== "undefined" && "mediaSession" in navigator)
+    import("@modules/mediaSession").then((m) => {
+      m.updateMediaSessionPlaybackState("paused");
+      m.updateMediaSessionPosition();
+    });
+  clearTimeout(historyTimeoutId);
+};
+
+if (typeof playerStore.audio.addEventListener === "function") {
+  playerStore.audio.addEventListener("loadeddata", themer);
+}
+
+let isPlayable = false;
+const playableCheckerID = setInterval(() => {
+  if (
+    queueStore.history.length ||
+    params.has("url") ||
+    params.has("text") ||
+    !params.has("s")
+  ) {
+    isPlayable = true;
+    clearInterval(playableCheckerID);
+  }
+}, 500);
+
+playerStore.audio.onloadstart = () => {
+  setPlayerStore("playbackState", "paused");
+  setPlayerStore("status", "");
+  if (isPlayable) playerStore.audio.play();
+
+  historyID = playerStore.stream.id;
+  playCountedForTrackId = "";
+  clearTimeout(historyTimeoutId);
+  playerStore.audio.playbackRate = playerStore.playbackRate;
+};
+
+playerStore.audio.onwaiting = () => {
+  setPlayerStore("playbackState", "loading");
+};
+
+playerStore.audio.ontimeupdate = () => {
+  if (
+    typeof document !== "undefined" &&
+    document.activeElement?.matches('input[type="range"]')
+  )
+    return;
+
+  const { audio, lrcSync, fullDuration, isMusic } = playerStore;
+
+  // Lyrics
+  if (lrcSync) lrcSync(audio.currentTime);
+
+  const seconds = Math.floor(audio.currentTime);
+
+  setPlayerStore("currentTime", seconds);
+  checkSponsorBlock(audio.currentTime);
+
+  // Artwork background pans with the progress, motion backgrounds only.
+  if (isMusic && playerBackground().endsWith("-motion") && fullDuration > 0) {
+    const { ref } = navStore.player;
+    if (ref) {
+      const diff = ref.offsetHeight - ref.offsetWidth;
+      const shift = Math.floor((seconds / fullDuration) * diff);
+      cssVar("--player-bp", `-${shift}px 0`);
+    }
+  }
+
+  const t = params.get("t");
+
+  if (t) {
+    if (isMusic) {
+      updateParam("t");
+      if (playerStore.saveProgress) {
+        setPlayerStore("saveProgress", false);
+        updateParam("s");
+      }
+    } else {
+      if (seconds % 5 === 0) {
+        const str = seconds.toString();
+        if (t !== str) updateParam("t", str);
+      }
+    }
+  }
+};
+
+playerStore.audio.onloadedmetadata = () => {
+  setPlayerStore({
+    currentTime: 0,
+    fullDuration: Math.floor(playerStore.audio.duration || 0),
+  });
+
+  if (typeof navigator !== "undefined" && "mediaSession" in navigator)
+    import("@modules/mediaSession").then((m) =>
+      m.updateMediaSessionPosition(),
     );
-});
+};
+
+playerStore.audio.onerror = () =>
+  import("@modules/audioErrorHandler").then((mod) =>
+    mod.default(playerStore.audio),
+  );
 
 async function getRecommendations() {
   const currentTitle = playerStore.stream.title;
@@ -555,18 +659,13 @@ async function getRecommendations() {
     );
 }
 
-export const [queueStore, setQueueStore] = createStore({
+export const [queueStore, setQueueStore, useQueueStore] = createStore({
   list: [] as TrackItem[],
   history: [] as TrackItem[],
   removeMode: false,
   isLoading: false,
 });
 
-/**
- * Filter items based on configuration and state.
- * By default blocks duplicates in queue/history and respects duration.
- * Items with context.src === '' bypass these filters (manual user intent).
- */
 function filterItemsByConfig(
   items: TrackItem[],
   options: {
@@ -584,7 +683,6 @@ function filterItemsByConfig(
   return items.filter((item) => {
     if (!item.id) return false;
 
-    // Manual intent override: if src is exactly '', we allow it regardless of filters.
     if (item.context?.src === "") return true;
 
     return (
@@ -597,9 +695,6 @@ function filterItemsByConfig(
   });
 }
 
-/**
- * Main entry point for adding items to the queue.
- */
 export function addToQueue(
   items: TrackItem[],
   options: {
@@ -607,10 +702,9 @@ export function addToQueue(
     prepend?: boolean;
   } = {},
 ) {
-  // Items with context.src === '' bypass all config filters
   let itemsToAdd = filterItemsByConfig(items);
 
-  setQueueStore("list", (prevList) => {
+  setQueueStore("list", (prevList: TrackItem[]) => {
     let combined = options.replace
       ? itemsToAdd
       : options.prepend
@@ -667,7 +761,7 @@ const createSearchInitialState = () => ({
   observer: { disconnect() {} } as IntersectionObserver,
 });
 
-export const [searchStore, setSearchStore] = createStore(
+export const [searchStore, setSearchStore, useSearchStore] = createStore(
   createSearchInitialState(),
 );
 
@@ -680,11 +774,6 @@ function cancelPendingSuggestions() {
   searchStore.suggestions.controller.abort();
 }
 
-/**
- * Drops the dropdown for good. Aborting alone is not enough: the debounced fetch
- * may not have started yet, so a pending timer would repopulate the list after a
- * search has already been submitted.
- */
 export function clearSuggestions() {
   cancelPendingSuggestions();
   lastQuery = "";
@@ -716,8 +805,6 @@ export function getSearchSuggestions(text: string) {
     fetch(url, { signal: newController.signal })
       .then((res) => res.json() as Promise<string[]>)
       .then((data) => {
-        // A resolved-but-aborted response can still land here, so confirm this
-        // is still the active request before repopulating the dropdown.
         if (searchStore.suggestions.controller !== newController) return;
         setSearchStore("suggestions", "data", data);
       })
@@ -810,7 +897,10 @@ const createListInitialState = () => ({
   observer: { disconnect() {} } as IntersectionObserver,
 });
 
-export const [listStore, setListStore] = createStore(createListInitialState());
+export const [listStore, setListStore, useListStore] = createStore(
+  createListInitialState(),
+);
+
 export async function getList(
   id: string,
   type: "playlist" | "channel" | "album" | "artist",
@@ -824,7 +914,6 @@ export async function getList(
 
   if (!all) updateParam(type, id);
 
-  // Special case for saved albums
   if (!all && type === "playlist" && id.startsWith("OLAK5uy")) {
     const libraryAlbums = getLibraryAlbums();
     const savedAlbum = libraryAlbums.find((a) => a.id === id);
@@ -838,7 +927,6 @@ export async function getList(
         author: savedAlbum.author,
         list: [],
       });
-      // Continue to fetch from API to get fresh tracks
     }
   }
 

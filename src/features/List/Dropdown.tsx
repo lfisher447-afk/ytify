@@ -1,8 +1,17 @@
-import { Show, createEffect, createSignal } from "solid-js";
-import { deleteCollection, getLists, saveLists, getCollectionItems, renameCollection, getLibraryAlbums, saveAlbumToLibrary, removeAlbumFromLibrary } from "@modules/library";
+import React, { useState, useEffect } from "react";
+import {
+  deleteCollection,
+  getLists,
+  saveLists,
+  getCollectionItems,
+  renameCollection,
+  getLibraryAlbums,
+  saveAlbumToLibrary,
+  removeAlbumFromLibrary,
+} from "@modules/library";
 import { player } from "@modules/playback";
 import {
-  listStore,
+  useListStore,
   resetList,
   setListStore,
   setStore,
@@ -14,34 +23,32 @@ import {
 } from "@stores";
 
 export default function Dropdown() {
-  const [isSubscribed, setSubscribed] = createSignal(false);
+  const listStore = useListStore();
+  const [isSubscribed, setSubscribed] = useState(false);
 
-  createEffect(() => {
-    // Determine if the current list item is an album based on listStore.id or type
+  useEffect(() => {
     const isAlbum =
       listStore.id.startsWith("MPREb") || listStore.type === "album";
 
     if (isAlbum) {
       const albums = getLibraryAlbums();
-      setSubscribed(albums.some((a) => a.id === listStore.id)); // Check if listStore.id (album browseId) is in saved albums
+      setSubscribed(albums.some((a) => a.id === listStore.id));
     } else {
-      // Existing logic for channels/playlists, using listStore.id
       setSubscribed(
         getLists(listStore.type as "channels" | "playlists").some(
           (item) => item.id === listStore.id,
         ),
       );
     }
-  });
+  }, [listStore.id, listStore.type]);
 
   function subscriptionHandler() {
-    // Determine if the current list item is an album based on listStore.id or type
     const isAlbum =
       listStore.id.startsWith("MPREb") || listStore.type === "album";
 
     if (isAlbum) {
-      if (isSubscribed()) {
-        removeAlbumFromLibrary(listStore.id); // Use listStore.id (album browseId) for removal
+      if (isSubscribed) {
+        removeAlbumFromLibrary(listStore.id);
       } else {
         const albumData: Album = {
           name: listStore.name,
@@ -49,19 +56,18 @@ export default function Dropdown() {
           img: listStore.img,
           id: listStore.id,
         };
-        saveAlbumToLibrary(listStore.id, albumData); // Use listStore.id (album browseId) for saving
+        saveAlbumToLibrary(listStore.id, albumData);
       }
-      setSubscribed(!isSubscribed());
+      setSubscribed(!isSubscribed);
       return;
     }
 
-    // Existing playlist/channel logic
     const { name, type, id, author, img } = listStore;
     if (type === "collection") return;
 
     let data = getLists(type as "channels" | "playlists");
 
-    if (isSubscribed()) {
+    if (isSubscribed) {
       data = data.filter((item) => item.id !== id);
     } else {
       const dataset = {
@@ -76,17 +82,21 @@ export default function Dropdown() {
     }
 
     saveLists(type as "channels" | "playlists", data);
-    setSubscribed(!isSubscribed());
+    setSubscribed(!isSubscribed);
   }
+
   return (
     <details>
       <summary>
-        <i aria-label={t("settings_more_options")} class="ri-more-2-fill"></i>
+        <i
+          aria-label={t("settings_more_options")}
+          className="ri-more-2-fill"
+        ></i>
       </summary>
       <ul id="listTools">
         <li
           id="playAllBtn"
-          onclick={() => {
+          onClick={() => {
             const fullList =
               listStore.type === "collection"
                 ? getCollectionItems(listStore.id)
@@ -102,12 +112,12 @@ export default function Dropdown() {
             openSubView("queue");
           }}
         >
-          <i class="ri-play-large-line"></i>
+          <i className="ri-play-large-line"></i>
           {t("list_play")}
         </li>
 
         <li
-          onclick={() => {
+          onClick={() => {
             const fullList =
               listStore.type === "collection"
                 ? getCollectionItems(listStore.id)
@@ -117,186 +127,172 @@ export default function Dropdown() {
             openSubView("queue");
           }}
         >
-          <i class="ri-list-check-2"></i>
+          <i className="ri-list-check-2"></i>
           {t("list_enqueue")}
         </li>
 
-        <Show when={listStore.type !== "collection" || listStore.isShared}>
+        {(listStore.type !== "collection" || listStore.isShared) && (
           <li
-            onclick={() =>
+            onClick={() =>
               import("@modules/listUtils").then((mod) => mod.importList())
             }
           >
-            <i class="ri-import-line"></i>
+            <i className="ri-import-line"></i>
             {t("list_import")}
           </li>
-        </Show>
+        )}
 
-        {/* The Show condition below seems to be designed to enable the subscription button for both playlists and albums.
-            Albums have type 'playlists' and their ID starts with 'OLAK5uy_'.
-            Playlists have type 'playlists' but their ID typically starts with 'PL'.
-            Channels have type 'channels'.
-            The existing condition is:
-            (listStore.type === 'channels' && !listStore.name.startsWith('Artist')) || listStore.type === 'playlists'
-            This correctly covers both regular playlists and albums (which are 'playlists' type)
-            and channels.
-        */}
-        <Show
-          when={
-            (listStore.type === "channels" &&
-              !listStore.name.startsWith("Artist")) ||
-            listStore.type === "playlists" ||
-            listStore.type === "album"
-          }
-        >
-          <li onclick={subscriptionHandler}>
-            <i class={"ri-star-" + (isSubscribed() ? "fill" : "line")}></i>
-            {isSubscribed()
-              ? t("list_saved_to_library")
-              : t("list_save_to_library")}
-          </li>
+        {((listStore.type === "channels" &&
+          !listStore.name.startsWith("Artist")) ||
+          listStore.type === "playlists" ||
+          listStore.type === "album") && (
+          <>
+            <li onClick={subscriptionHandler}>
+              <i className={"ri-star-" + (isSubscribed ? "fill" : "line")}></i>
+              {isSubscribed
+                ? t("list_saved_to_library")
+                : t("list_save_to_library")}
+            </li>
 
-          <li
-            onclick={() => {
-              const { type, id } = listStore;
-              let url = "";
+            <li
+              onClick={() => {
+                const { type, id } = listStore;
+                let url = "";
 
-              if (id.startsWith("MPREb")) {
-                url = "https://music.youtube.com/browse/" + id;
-              } else if (
-                type === "playlists" ||
-                type === "album" ||
-                id.startsWith("OLAK5uy")
-              ) {
-                url = "https://www.youtube.com/playlist?list=" + id;
-              } else if (type === "channels") {
-                url = "https://www.youtube.com/channel/" + id;
-              }
-
-              if (url) open(url);
-            }}
-          >
-            <i class="ri-youtube-fill"></i>
-            {t("actions_menu_yt_link")}
-          </li>
-
-          <li
-            onclick={() => {
-              const { type, id, name, author } = listStore;
-              let path = "";
-              let displayName = name;
-
-              if (id.startsWith("MPREb") && type === "channels") {
-                path = "artist/" + id;
-                displayName = name.replace("Artist - ", "");
-              } else if (type === "channels") {
-                path = "channel/" + id;
-              } else if (type === "album" || id.startsWith("MPREb")) {
-                path = "album/" + id;
-              } else if (type === "playlists") {
-                path = "playlist/" + id;
-              }
-
-              if (path) {
-                const shareUrl = location.origin + "/" + path;
-                if (navigator.share) {
-                  navigator
-                    .share({
-                      title: displayName + (author ? " by " + author : ""),
-                      url: shareUrl,
-                    })
-                    .catch(console.error);
-                } else {
-                  navigator.clipboard.writeText(shareUrl);
-                  setStore("snackbar", "Link copied to clipboard");
+                if (id.startsWith("MPREb")) {
+                  url = "https://music.youtube.com/browse/" + id;
+                } else if (
+                  type === "playlists" ||
+                  type === "album" ||
+                  id.startsWith("OLAK5uy")
+                ) {
+                  url = "https://www.youtube.com/playlist?list=" + id;
+                } else if (type === "channels") {
+                  url = "https://www.youtube.com/channel/" + id;
                 }
-              }
-            }}
-          >
-            <i class="ri-share-forward-line"></i>
-            {t("list_share_link")}
-          </li>
-        </Show>
 
-        <Show when={listStore.type === "collection" && listStore.isReversed}>
+                if (url) window.open(url);
+              }}
+            >
+              <i className="ri-youtube-fill"></i>
+              {t("actions_menu_yt_link")}
+            </li>
+
+            <li
+              onClick={() => {
+                const { type, id, name, author } = listStore;
+                let path = "";
+                let displayName = name;
+
+                if (id.startsWith("MPREb") && type === "channels") {
+                  path = "artist/" + id;
+                  displayName = name.replace("Artist - ", "");
+                } else if (type === "channels") {
+                  path = "channel/" + id;
+                } else if (type === "album" || id.startsWith("MPREb")) {
+                  path = "album/" + id;
+                } else if (type === "playlists") {
+                  path = "playlist/" + id;
+                }
+
+                if (path) {
+                  const shareUrl = location.origin + "/" + path;
+                  if (navigator.share) {
+                    navigator
+                      .share({
+                        title: displayName + (author ? " by " + author : ""),
+                        url: shareUrl,
+                      })
+                      .catch(console.error);
+                  } else {
+                    navigator.clipboard.writeText(shareUrl);
+                    setStore("snackbar", "Link copied to clipboard");
+                  }
+                }
+              }}
+            >
+              <i className="ri-share-forward-line"></i>
+              {t("list_share_link")}
+            </li>
+          </>
+        )}
+
+        {listStore.type === "collection" && listStore.isReversed && (
           <li id="clearListBtn">
-            <i class="ri-close-large-line"></i>
+            <i className="ri-close-large-line"></i>
             {t("list_clear_all")}
           </li>
-        </Show>
+        )}
 
-        <Show
-          when={
-            listStore.type === "collection" &&
-            !listStore.isReversed &&
-            !listStore.isShared
-          }
-        >
-          <li
-            id="deleteCollectionBtn"
-            onclick={() => {
-              const { id } = listStore;
-              if (confirm(t("list_prompt_delete", id))) {
-                deleteCollection(id);
-                resetList();
-              }
-            }}
-          >
-            <i class="ri-delete-bin-2-line"></i>
-            {t("list_delete")}
-          </li>
+        {listStore.type === "collection" &&
+          !listStore.isReversed &&
+          !listStore.isShared && (
+            <>
+              <li
+                id="deleteCollectionBtn"
+                onClick={() => {
+                  const { id } = listStore;
+                  if (confirm(t("list_prompt_delete", id))) {
+                    deleteCollection(id);
+                    resetList();
+                  }
+                }}
+              >
+                <i className="ri-delete-bin-2-line"></i>
+                {t("list_delete")}
+              </li>
 
-          <li
-            id="renameCollectionBtn"
-            onclick={() => {
-              const oldName = listStore.name;
-              const newName = prompt(t("list_rename_prompt"), oldName);
-              if (newName && newName !== oldName) {
-                renameCollection(oldName, newName);
-                setListStore("name", newName);
-                setListStore("id", newName);
-                setStore("snackbar", t("list_rename_success"));
-              }
-            }}
-          >
-            <i class="ri-edit-line"></i>
-            {t("list_rename")}
-          </li>
+              <li
+                id="renameCollectionBtn"
+                onClick={() => {
+                  const oldName = listStore.name;
+                  const newName = prompt(t("list_rename_prompt"), oldName);
+                  if (newName && newName !== oldName) {
+                    renameCollection(oldName, newName);
+                    setListStore("name", newName);
+                    setListStore("id", newName);
+                    setStore("snackbar", t("list_rename_success"));
+                  }
+                }}
+              >
+                <i className="ri-edit-line"></i>
+                {t("list_rename")}
+              </li>
 
-          <li
-            id="shareCollectionBtn"
-            onclick={() =>
-              import("@modules/listUtils").then((mod) =>
-                mod.shareCollection(getCollectionItems(listStore.id)),
-              )
-            }
-          >
-            <i class="ri-link"></i>
-            {t("list_share")}
-          </li>
+              <li
+                id="shareCollectionBtn"
+                onClick={() =>
+                  import("@modules/listUtils").then((mod) =>
+                    mod.shareCollection(getCollectionItems(listStore.id)),
+                  )
+                }
+              >
+                <i className="ri-link"></i>
+                {t("list_share")}
+              </li>
 
-          <li
-            id="exportCollectionBtn"
-            onclick={() => {
-              const collectionData: TrackItem[] = getCollectionItems(
-                listStore.id,
-              );
-              console.log(collectionData);
-              const jsonString = JSON.stringify(collectionData, null, 2);
-              navigator.clipboard
-                .writeText(jsonString)
-                .then(() => {
-                  setStore("snackbar", t("list_export_success"));
-                })
-                .catch((err) => {
-                  setStore("snackbar", t("list_export_error") + err);
-                });
-            }}
-          >
-            <i class="ri-export-line"></i>
-            {t("list_export")}
-          </li>
-        </Show>
+              <li
+                id="exportCollectionBtn"
+                onClick={() => {
+                  const collectionData: TrackItem[] = getCollectionItems(
+                    listStore.id,
+                  );
+                  const jsonString = JSON.stringify(collectionData, null, 2);
+                  navigator.clipboard
+                    .writeText(jsonString)
+                    .then(() => {
+                      setStore("snackbar", t("list_export_success"));
+                    })
+                    .catch((err) => {
+                      setStore("snackbar", t("list_export_error") + err);
+                    });
+                }}
+              >
+                <i className="ri-export-line"></i>
+                {t("list_export")}
+              </li>
+            </>
+          )}
       </ul>
     </details>
   );

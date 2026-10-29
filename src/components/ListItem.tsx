@@ -1,17 +1,19 @@
+import React, { useState, useRef } from "react";
 import { hostResolver, generateImageUrl } from "@utils";
-import { config } from "@config";
+import { useConfig } from "@config";
 import "./ListItem.css";
-import { Show, createSignal } from "solid-js";
 import { getList, setListStore } from "@stores";
+import { cn } from "@components/common";
 
-export default function (data: YTListItem) {
-  const [getThumbnail, setThumbnail] = createSignal(
+export default function ListItem(data: YTListItem) {
+  const config = useConfig();
+  const [thumbnail, setThumbnail] = useState(() =>
     generateImageUrl(data.img, "", data.type === "album"),
   );
-  let img!: HTMLImageElement;
+  const imgRef = useRef<HTMLImageElement>(null);
 
   function unravel() {
-    img.parentElement!.classList.remove("ravel");
+    imgRef.current?.parentElement?.classList.remove("ravel");
   }
   function handleError() {
     unravel();
@@ -28,30 +30,31 @@ export default function (data: YTListItem) {
 
   return (
     <a
-      class={
-        "listItem card card--interactive " +
-        (data.class ? `${data.class} ` : "") +
-        (config.loadImage ? "ravel" : "")
-      }
+      className={cn(
+        "listItem card card--interactive",
+        data.class,
+        config.loadImage && "ravel",
+      )}
       href={hostResolver(url)}
-      onclick={(e) => {
+      onClick={(e) => {
         e.preventDefault();
         setListStore("img", data.img);
         getList(data.id, data.type);
       }}
     >
-      <Show when={config.loadImage}>
+      {config.loadImage && (
         <img
-          ref={img}
-          src={getThumbnail()}
+          ref={imgRef}
+          src={thumbnail}
           onError={handleError}
           onLoad={unravel}
+          alt={data.name}
         />
-      </Show>
+      )}
       <div>
-        <p class="title truncate">{data.name}</p>
-        <p class="uData truncate">{uploaderData}</p>
-        <p class="stats truncate">{stats}</p>
+        <p className="title truncate">{data.name}</p>
+        <p className="uData truncate">{uploaderData}</p>
+        <p className="stats truncate">{stats}</p>
       </div>
     </a>
   );

@@ -1,7 +1,7 @@
-import { onMount, Show } from "solid-js";
+import React, { useEffect, useRef } from "react";
 import "./Queue.css";
 import {
-  queueStore,
+  useQueueStore,
   setNavStore,
   t,
   setQueueStore,
@@ -10,48 +10,52 @@ import {
 import List from "./List";
 import Dropdown from "./Dropdown";
 import HeaderNav from "@components/HeaderNav";
+import { cn } from "@components/common";
 
-export default function () {
-  let queueSection!: HTMLDivElement;
+export default function QueueFeature() {
+  const queueSection = useRef<HTMLDivElement>(null);
+  const queueStore = useQueueStore();
 
-  onMount(() => {
-    setNavStore("queue", "ref", queueSection);
-    queueSection.scrollIntoView();
-  });
+  useEffect(() => {
+    if (queueSection.current) {
+      setNavStore("queue", "ref", queueSection.current);
+      queueSection.current.scrollIntoView();
+    }
+  }, []);
 
   const scrollToTop = () => {
-    queueSection.scrollTo({ top: 0, behavior: "smooth" });
+    queueSection.current?.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const durationStr = totalQueueDuration(queueStore.list);
+
   return (
-    <section class="queueSection" ref={queueSection}>
-      <header class="sticky-bar">
+    <section className="queueSection" ref={queueSection}>
+      <header className="sticky-bar">
         <HeaderNav
           title={
-            <p onclick={scrollToTop} style={{ cursor: "pointer" }}>
-              {queueStore.list.length === 0
-                ? t("nav_queue")
-                : totalQueueDuration(queueStore.list)}
+            <p onClick={scrollToTop} style={{ cursor: "pointer" }}>
+              {queueStore.list.length === 0 ? t("nav_queue") : durationStr}
             </p>
           }
           extra={
-            <Show when={queueStore.list.length > 0}>
+            queueStore.list.length > 0 && (
               <span
-                class="header-nav-badge queue-duration-badge"
-                onclick={scrollToTop}
+                className="header-nav-badge queue-duration-badge"
+                onClick={scrollToTop}
                 style={{ cursor: "pointer" }}
               >
-                {totalQueueDuration(queueStore.list)}
+                {durationStr}
               </span>
-            </Show>
+            )
           }
         />
-        <div class="right-group">
+        <div className="right-group">
           <i
-            class="ri-shuffle-line"
+            className="ri-shuffle-line"
             aria-label={t("queue_shuffle")}
-            onclick={() => {
-              setQueueStore("list", (list) => {
+            onClick={() => {
+              setQueueStore("list", (list: TrackItem[]) => {
                 const shuffled = [...list];
                 for (let i = shuffled.length - 1; i > 0; i--) {
                   const j = Math.floor(Math.random() * (i + 1));
@@ -63,12 +67,12 @@ export default function () {
           ></i>
 
           <i
-            class="ri-indeterminate-circle-line"
-            classList={{
-              on: queueStore.removeMode,
-            }}
+            className={cn(
+              "ri-indeterminate-circle-line",
+              queueStore.removeMode && "on",
+            )}
             aria-label={t("queue_remove_mode")}
-            onclick={() => {
+            onClick={() => {
               setQueueStore("removeMode", !queueStore.removeMode);
             }}
           ></i>
@@ -77,12 +81,11 @@ export default function () {
         <Dropdown />
       </header>
 
-      <Show
-        when={!queueStore.isLoading}
-        fallback={<i class="ri-loader-3-line loading-spinner"></i>}
-      >
+      {!queueStore.isLoading ? (
         <List />
-      </Show>
+      ) : (
+        <i className="ri-loader-3-line loading-spinner"></i>
+      )}
     </section>
   );
 }

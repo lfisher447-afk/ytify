@@ -1,10 +1,10 @@
-import { For, Show, lazy, onMount, createMemo } from "solid-js";
+import React, { useMemo, useEffect, useRef, Suspense, lazy } from "react";
 import "./Library.css";
 import Collections from "./Collections";
 
-import { librarySections } from "@config";
+import { useLibrarySections } from "@config";
 import { getLibraryAlbums, getLists } from "@modules/library";
-import { t, setNavStore, store } from "@stores";
+import { t, setNavStore, useAppStore } from "@stores";
 import ListItem from "@components/ListItem";
 import HeaderActions from "@components/HeaderActions";
 import HeaderNav from "@components/HeaderNav";
@@ -12,83 +12,87 @@ import HeaderNav from "@components/HeaderNav";
 const SubFeed = lazy(() => import("./SubFeed"));
 const Featured = lazy(() => import("./Featured"));
 
-export default function () {
-  let libraryRef!: HTMLElement;
+export default function LibraryFeature() {
+  const libraryRef = useRef<HTMLElement>(null);
+  const store = useAppStore();
+  const sections = useLibrarySections();
 
-  onMount(() => {
-    setNavStore("library", "ref", libraryRef);
-    libraryRef.scrollIntoView();
-  });
+  useEffect(() => {
+    if (libraryRef.current) {
+      setNavStore("library", "ref", libraryRef.current);
+      libraryRef.current.scrollIntoView();
+    }
+  }, []);
 
-  const libraryAlbums = createMemo(() => {
-    store.libraryUpdated;
+  const libraryAlbums = useMemo(() => {
     return getLibraryAlbums();
-  });
+  }, [store.libraryUpdated]);
 
-  const libraryPlaylists = createMemo(() => {
-    store.libraryUpdated;
+  const libraryPlaylists = useMemo(() => {
     return getLists("playlists");
-  });
+  }, [store.libraryUpdated]);
 
   return (
-    <section class="library" ref={libraryRef}>
-      <header class="sticky-bar">
+    <section className="library" ref={libraryRef}>
+      <header className="sticky-bar">
         <HeaderNav title={<p>{t("nav_library")}</p>} />
         <HeaderActions />
       </header>
 
-      <Show when={librarySections().subfeed}>
-        <SubFeed />
-      </Show>
-      <Show when={librarySections().featured}>
-        <Featured />
-      </Show>
+      {sections.subfeed && (
+        <Suspense fallback={null}>
+          <SubFeed />
+        </Suspense>
+      )}
+      {sections.featured && (
+        <Suspense fallback={null}>
+          <Featured />
+        </Suspense>
+      )}
       <Collections />
       <br />
-      <Show when={libraryAlbums().length > 0}>
+      {libraryAlbums.length > 0 && (
         <article>
           <p>
-            <i class="ri-album-fill"></i>&nbsp;
+            <i className="ri-album-fill"></i>&nbsp;
             {t("library_albums")}
           </p>
           <div>
-            <For each={libraryAlbums()}>
-              {(item) => (
-                <ListItem
-                  name={item.name}
-                  id={item.id}
-                  img={item.img}
-                  author={item.author}
-                  type="album"
-                />
-              )}
-            </For>
+            {libraryAlbums.map((item) => (
+              <ListItem
+                key={item.id}
+                name={item.name}
+                id={item.id}
+                img={item.img}
+                author={item.author}
+                type="album"
+              />
+            ))}
           </div>
         </article>
-      </Show>
+      )}
       <br />
 
-      <Show when={libraryPlaylists().length > 0}>
+      {libraryPlaylists.length > 0 && (
         <article>
           <p>
-            <i class="ri-youtube-fill"></i>&nbsp;
+            <i className="ri-youtube-fill"></i>&nbsp;
             {t("library_playlists")}
           </p>
           <div>
-            <For each={libraryPlaylists()}>
-              {(item) => (
-                <ListItem
-                  name={item.name}
-                  id={item.id}
-                  img={item.img}
-                  author={item.author}
-                  type="playlist"
-                />
-              )}
-            </For>
+            {libraryPlaylists.map((item) => (
+              <ListItem
+                key={item.id}
+                name={item.name}
+                id={item.id}
+                img={item.img}
+                author={item.author}
+                type="playlist"
+              />
+            ))}
           </div>
         </article>
-      </Show>
+      )}
 
       <br />
     </section>

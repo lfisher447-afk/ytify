@@ -1,22 +1,31 @@
-import { lazy, Show } from "solid-js";
-import { config } from "@config";
+import React, { Suspense, lazy } from "react";
+import { useConfig } from "@config";
 import {
   LikeButton,
   MediaDetails,
   PlayButton,
   PlayNextButton,
 } from "./MediaPartials";
-import { playerStore, setNavStore, queueStore } from "@stores";
+import { usePlayerStore, setNavStore, useQueueStore } from "@stores";
 
 const MediaArtwork = lazy(
   () => import("@components/MediaPartials/MediaArtwork"),
 );
 
-export default function () {
+export default function MiniPlayer() {
+  const config = useConfig();
+  const playerStore = usePlayerStore();
+  const queueStore = useQueueStore();
+
+  const progress =
+    playerStore.fullDuration > 0
+      ? (playerStore.currentTime / playerStore.fullDuration).toFixed(3)
+      : "0";
+
   return (
     <div
-      class="miniplayer"
-      onclick={(e) => {
+      className="miniplayer"
+      onClick={(e) => {
         const target = e.target as HTMLElement;
         if (!target.closest("button")) {
           setNavStore("player", "state", true);
@@ -27,19 +36,15 @@ export default function () {
         }
       }}
     >
-      <progress
-        value={(
-          playerStore.currentTime / playerStore.fullDuration || 0
-        ).toFixed(3)}
-      ></progress>
-      <Show when={config.loadImage}>
-        <MediaArtwork />
-      </Show>
+      <progress value={progress}></progress>
+      {config.loadImage && (
+        <Suspense fallback={null}>
+          <MediaArtwork />
+        </Suspense>
+      )}
       <MediaDetails />
       <PlayButton />
-      <Show when={queueStore.list.length} fallback={<LikeButton />}>
-        <PlayNextButton />
-      </Show>
+      {queueStore.list.length > 0 ? <PlayNextButton /> : <LikeButton />}
     </div>
   );
 }

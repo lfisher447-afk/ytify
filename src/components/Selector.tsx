@@ -1,27 +1,27 @@
-import type { JSXElement } from 'solid-js';
-import { t } from '@stores';
+import React from "react";
+import { t } from "@stores";
 
-type Selector = {
-  label: TranslationKeys | string,
-  id: string,
-  onchange: (e: { target: HTMLSelectElement }) => void,
-  value: string,
-  children: JSXElement
-}
+type SelectorProps = {
+  label: TranslationKeys | string;
+  id: string;
+  onchange?: (e: { target: HTMLSelectElement }) => void;
+  onChange?: (e: React.ChangeEvent<HTMLSelectElement>) => void;
+  value: string;
+  children: React.ReactNode;
+};
 
-export function Selector(_: Selector) {
-  let target!: HTMLSelectElement;
+export function Selector(props: SelectorProps) {
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (props.onChange) props.onChange(e);
+    if (props.onchange) props.onchange({ target: e.target });
+  };
+
   return (
     <span>
-      <label for={_.id}>
-        {t(_.label as TranslationKeys)}
-      </label>
-      <select
-        id={_.id}
-        onchange={_.onchange}
-        ref={target}
-        value={_.value}
-      >{_.children}</select>
+      <label htmlFor={props.id}>{t(props.label as TranslationKeys)}</label>
+      <select id={props.id} onChange={handleChange} value={props.value}>
+        {props.children}
+      </select>
     </span>
   );
 }

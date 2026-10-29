@@ -3,18 +3,19 @@
   "version": "8.5-Ultra",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0 --port 3000",
     "icons": "bun scripts/generate-icons.ts",
     "backend": "bun scripts/test-backend.ts",
     "test": "bun test scripts/",
     "lint": "bun lint",
     "lint:fix": "bun lint --fix",
-    "build": "bun run icons && tsc && vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "knip": "knip"
   },
   "dependencies": {
-    "solid-js": "^1.9.17"
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20261028.1",
@@ -23,7 +24,10 @@
     "@netlify/functions": "^6.0.3",
     "@types/bun": "^1.4.4",
     "@types/node": "^26.6.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@types/subset-font": "^2.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "autoprefixer": "^10.6.2",
     "knip": "^6.43.0",
     "open-props": "1.7.23",
@@ -33,7 +37,6 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-pwa": "^2.0.0",
-    "vite-plugin-solid": "^2.11.14",
     "youtubei.js": "18.3.0"
   },
   "browserslist": [

@@ -1,12 +1,13 @@
+import React, { useEffect, useRef } from "react";
 import {
   LikeButton,
   PlayButton,
   PlayNextButton,
 } from "@components/MediaPartials";
 import {
-  playerStore,
+  usePlayerStore,
   playPrev,
-  queueStore,
+  useQueueStore,
   setPlayerStore,
   setVolume,
   updateParam,
@@ -14,19 +15,29 @@ import {
 } from "@stores";
 import { convertSStoHHMMSS } from "@utils";
 import { VOLUME_PRESETS } from "@config";
-import { Accessor, For, onMount, Setter, Show } from "solid-js";
+import { cn } from "@components/common";
 
-export default function (_: {
-  showLyrics: Accessor<boolean>;
-  setShowLyrics: Setter<boolean>;
+export default function Controls(props: {
+  showLyrics: boolean;
+  setShowLyrics: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
-  let slider!: HTMLInputElement;
+  const playerStore = usePlayerStore();
+  const queueStore = useQueueStore();
+  const sliderRef = useRef<HTMLInputElement>(null);
 
-  onMount(() => {
-    ["touchstart", "touchmove", "touchend"].forEach((type) => {
-      slider.addEventListener(type, (e) => e.stopPropagation());
-    });
-  });
+  useEffect(() => {
+    const slider = sliderRef.current;
+    if (!slider) return;
+    const stopProp = (e: TouchEvent) => e.stopPropagation();
+    slider.addEventListener("touchstart", stopProp);
+    slider.addEventListener("touchmove", stopProp);
+    slider.addEventListener("touchend", stopProp);
+    return () => {
+      slider.removeEventListener("touchstart", stopProp);
+      slider.removeEventListener("touchmove", stopProp);
+      slider.removeEventListener("touchend", stopProp);
+    };
+  }, []);
 
   function updatePositionState() {
     if ("mediaSession" in navigator)
@@ -37,13 +48,13 @@ export default function (_: {
 
   return (
     <>
-      <span class="slider">
+      <span className="slider">
         <input
           type="range"
           value={playerStore.currentTime}
-          max={playerStore.fullDuration}
-          ref={slider}
-          onchange={(e) => {
+          max={playerStore.fullDuration || 100}
+          ref={sliderRef}
+          onChange={(e) => {
             playerStore.audio.currentTime = parseInt(e.target.value);
           }}
         />
@@ -51,25 +62,27 @@ export default function (_: {
           <p id="currentDuration">
             {convertSStoHHMMSS(playerStore.currentTime)}
           </p>
-          <p id="fullDuration">{convertSStoHHMMSS(playerStore.fullDuration)}</p>
+          <p id="fullDuration">
+            {convertSStoHHMMSS(playerStore.fullDuration)}
+          </p>
         </div>
       </span>
 
-      <div class="mainShelf">
-        <Show when={queueStore.history.length}>
+      <div className="mainShelf">
+        {queueStore.history.length > 0 && (
           <button
             aria-label={t("player_play_previous")}
-            class="ri-skip-back-fill"
+            className="ri-skip-back-fill"
             id="playPrevButton"
-            onclick={playPrev}
+            onClick={playPrev}
           ></button>
-        </Show>
+        )}
 
         <button
           aria-label={t("player_seek_backward")}
-          class="ri-replay-15-line"
+          className="ri-replay-15-line"
           id="seekBwdButton"
-          onclick={() => {
+          onClick={() => {
             playerStore.audio.currentTime -= 15;
           }}
         ></button>
@@ -78,22 +91,20 @@ export default function (_: {
 
         <button
           aria-label={t("player_seek_forward")}
-          class="ri-forward-15-line"
+          className="ri-forward-15-line"
           id="seekFwdButton"
-          onclick={() => {
+          onClick={() => {
             playerStore.audio.currentTime += 15;
           }}
         ></button>
-        <Show when={queueStore.list.length}>
-          <PlayNextButton />
-        </Show>
+        {queueStore.list.length > 0 && <PlayNextButton />}
       </div>
 
-      <div class="bottomShelf">
+      <div className="bottomShelf">
         <select
           id="playSpeed"
           value={playerStore.playbackRate.toFixed(2)}
-          onchange={(e) => {
+          onChange={(e) => {
             const ref = e.target;
             const speed = parseFloat(ref.value);
             playerStore.audio.playbackRate = speed;
@@ -118,65 +129,65 @@ export default function (_: {
           <option value="4.00">4.00x</option>
         </select>
 
-        <Show when={playerStore.isMusic}>
+        {playerStore.isMusic && (
           <i
             aria-label={t("player_lyrics")}
-            class="ri-music-2-line"
-            classList={{
-              on: _.showLyrics(),
-            }}
-            onclick={() => _.setShowLyrics(!_.showLyrics())}
+            className={cn("ri-music-2-line", props.showLyrics && "on")}
+            onClick={() => props.setShowLyrics(!props.showLyrics)}
           ></i>
-        </Show>
+        )}
 
         <LikeButton />
 
         <i
           aria-label={t("player_loop")}
-          class="ri-repeat-fill"
-          classList={{ on: playerStore.loop }}
-          onclick={() => {
+          className={cn("ri-repeat-fill", playerStore.loop && "on")}
+          onClick={() => {
             const newLoopState = !playerStore.loop;
             playerStore.audio.loop = newLoopState;
             setPlayerStore("loop", newLoopState);
           }}
         ></i>
-        <Show when={!playerStore.isMusic}>
-          <i
-            aria-label={t("actions_menu_watch_video")}
-            class="ri-video-line"
-            onclick={() => setPlayerStore("isWatching", true)}
-          ></i>
+        {!playerStore.isMusic && (
+          <>
+            <i
+              aria-label={t("actions_menu_watch_video")}
+              className="ri-video-line"
+              onClick={() => setPlayerStore("isWatching", true)}
+            ></i>
 
-          <i
-            aria-label={t("player_save_progress")}
-            class={`ri-signpost-${playerStore.saveProgress ? "fill" : "line"}`}
-            onclick={() => {
-              if (playerStore.saveProgress) {
-                setPlayerStore("saveProgress", false);
-                updateParam("t");
-                updateParam("s");
-              } else {
-                setPlayerStore("saveProgress", true);
-                if (playerStore.stream.id)
-                  updateParam("s", playerStore.stream.id);
-                updateParam("t", playerStore.currentTime.toString());
-              }
-            }}
-          ></i>
-        </Show>
+            <i
+              aria-label={t("player_save_progress")}
+              className={`ri-signpost-${playerStore.saveProgress ? "fill" : "line"}`}
+              onClick={() => {
+                if (playerStore.saveProgress) {
+                  setPlayerStore("saveProgress", false);
+                  updateParam("t");
+                  updateParam("s");
+                } else {
+                  setPlayerStore("saveProgress", true);
+                  if (playerStore.stream.id)
+                    updateParam("s", playerStore.stream.id);
+                  updateParam("t", playerStore.currentTime.toString());
+                }
+              }}
+            ></i>
+          </>
+        )}
 
         <select
           id="volumeChanger"
           value={playerStore.volume}
-          onchange={(e) => {
+          onChange={(e) => {
             setVolume(parseFloat(e.target.value));
             e.target.blur();
           }}
         >
-          <For each={VOLUME_PRESETS}>
-            {(preset) => <option value={preset / 100}>{preset}%</option>}
-          </For>
+          {VOLUME_PRESETS.map((preset) => (
+            <option key={preset} value={preset / 100}>
+              {preset}%
+            </option>
+          ))}
         </select>
       </div>
     </>

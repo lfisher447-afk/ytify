@@ -50,7 +50,7 @@ The journey began with a frustration. As a regular user of NewPipe in 2021, I re
 - **Monero / XMR** `87BtajHDsoGD5acvkKgi2j385ZKUbJkH4QBoCQtFGgTARKWRAVEo28RLs1S3P3w6AgMkjcNLmSST7CLuxKFuzXciJiNBQqH`
 
 ## Development 🔧
-1. Prerequisites : Fundamental understanding of SolidJS. 
+1. Prerequisites : Fundamental understanding of React & TypeScript. 
 2. Clone repository with
 ```
 git clone https://github.com/n-ce/ytify
@@ -63,14 +63,12 @@ or
 ```
 cd ytify && npm i
 ```
-4. If you prefer using DevTools, you may disable eruda in [`vite.config.ts`](https://github.com/n-ce/ytify/blob/main/vite.config.ts)
-`injectEruda(false),`
 
-5. Start the development server and open localhost 
+4. Start the development server and open localhost 
 ```
-npm run dev -- --open
+npm run dev
 ```
-6. Learn More at our [wiki](https://github.com/n-ce/ytify/wiki).
+5. Learn More at our [wiki](https://github.com/n-ce/ytify/wiki).
 
 
 
@@ -81,7 +79,7 @@ ytify is being translated into multiple languages using [Weblate](https://hosted
 ## Acknowledgements 🙏
 - [Shashwat](https://github.com/Shashwat-CODING) - Maintainer / Developer of Streaming services
 - [InnerTube API](https://github.com/LuanRT/YouTube.js) - Powers the ytify backend.
-- [Solid.js](https://www.solidjs.com/) - Performant UI Library
+- [React](https://react.dev/) - Declarative UI framework
 - [LRCLIB](https://lrclib.net) - Synced Lyrics Provider
 - [Netlify](https://www.netlify.com) - Hosting, PR Previews, Edge Functions
 - [Vite](https://vitejs.dev) - Development Server, Code Bundling, Project Scaffolding

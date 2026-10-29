@@ -1,3 +1,4 @@
+import React from "react";
 import "./Queue.css";
 import {
   setStore,
@@ -7,18 +8,21 @@ import {
   setQueueStore,
   groupQueueByAuthor,
 } from "@stores";
-import { config, setConfig } from "@config";
+import { useConfig, setConfig } from "@config";
+import { cn } from "@components/common";
 
 export default function Dropdown() {
+  const config = useConfig();
+
   return (
     <details>
       <summary>
-        <i aria-label="More Options" class="ri-more-2-fill"></i>
+        <i aria-label="More Options" className="ri-more-2-fill"></i>
       </summary>
-      <ul class="queuetools" onclick={(e) => e.stopPropagation()}>
+      <ul className="queuetools" onClick={(e) => e.stopPropagation()}>
         <li
-          classList={{ on: config.persistentShuffle }}
-          onclick={(e) => {
+          className={cn(config.persistentShuffle && "on")}
+          onClick={(e) => {
             const val = !config.persistentShuffle;
             setConfig("persistentShuffle", val);
             (e.currentTarget as HTMLElement).classList.toggle("on");
@@ -28,8 +32,8 @@ export default function Dropdown() {
         </li>
 
         <li
-          classList={{ on: Boolean(config.durationFilter) }}
-          onclick={(e) => {
+          className={cn(Boolean(config.durationFilter) && "on")}
+          onClick={(e) => {
             const val = config.durationFilter
               ? ""
               : prompt("Enter duration limit (e.g. 10:00)", "10:00");
@@ -47,8 +51,8 @@ export default function Dropdown() {
         </li>
 
         <li
-          classList={{ on: config.similarContent }}
-          onclick={(e) => {
+          className={cn(config.similarContent && "on")}
+          onClick={(e) => {
             setConfig("similarContent", !config.similarContent);
             setStore("snackbar", t("queue_change_notification"));
             (e.currentTarget as HTMLElement).classList.toggle("on");
@@ -58,8 +62,8 @@ export default function Dropdown() {
         </li>
 
         <li
-          classList={{ on: config.contextualFill }}
-          onclick={(e) => {
+          className={cn(config.contextualFill && "on")}
+          onClick={(e) => {
             setConfig("contextualFill", !config.contextualFill);
             (e.currentTarget as HTMLElement).classList.toggle("on");
           }}
@@ -68,13 +72,13 @@ export default function Dropdown() {
         </li>
 
         <li
-          classList={{ on: config.authorGrouping }}
-          onclick={(e) => {
+          className={cn(config.authorGrouping && "on")}
+          onClick={(e) => {
             const authorGrouping = !config.authorGrouping;
             setConfig("authorGrouping", authorGrouping);
             (e.currentTarget as HTMLElement).classList.toggle("on");
             if (authorGrouping) {
-              setQueueStore("list", (list) => groupQueueByAuthor(list));
+              setQueueStore("list", (list: TrackItem[]) => groupQueueByAuthor(list));
             }
           }}
         >
@@ -82,7 +86,7 @@ export default function Dropdown() {
         </li>
 
         <li
-          onclick={() => {
+          onClick={() => {
             setQueueStore("list", []);
             setQueueStore("history", []);
           }}

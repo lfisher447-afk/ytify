@@ -1,4 +1,4 @@
-import { For } from "solid-js";
+import React from "react";
 import { t } from "@stores";
 
 const FEATURES: {
@@ -113,34 +113,32 @@ const SHORTCUTS: { keys: string[]; label: TranslationKeys }[] = [
   { keys: ["/"], label: "guide_shortcut_focus_search" },
 ];
 
-export default function () {
+export default function EasyUsageGuide() {
   return (
-    <div class="usageGuide">
-      <ul class="guideFeatures">
-        <For each={FEATURES}>
-          {(feature) => (
-            <li>
-              <i class={feature.icon}></i>
-              <b>{t(feature.title)}</b>
-              <span>{t(feature.desc)}</span>
-            </li>
-          )}
-        </For>
+    <div className="usageGuide">
+      <ul className="guideFeatures">
+        {FEATURES.map((feature) => (
+          <li key={feature.title}>
+            <i className={feature.icon}></i>
+            <b>{t(feature.title)}</b>
+            <span>{t(feature.desc)}</span>
+          </li>
+        ))}
       </ul>
 
-      <p class="guideTitle">{t("guide_shortcuts_title")}</p>
+      <p className="guideTitle">{t("guide_shortcuts_title")}</p>
 
-      <ul class="guideShortcuts">
-        <For each={SHORTCUTS}>
-          {(shortcut) => (
-            <li>
-              <span class="guideKeys">
-                <For each={shortcut.keys}>{(key) => <kbd>{key}</kbd>}</For>
-              </span>
-              <span>{t(shortcut.label)}</span>
-            </li>
-          )}
-        </For>
+      <ul className="guideShortcuts">
+        {SHORTCUTS.map((shortcut, index) => (
+          <li key={index}>
+            <span className="guideKeys">
+              {shortcut.keys.map((key) => (
+                <kbd key={key}>{key}</kbd>
+              ))}
+            </span>
+            <span>{t(shortcut.label)}</span>
+          </li>
+        ))}
       </ul>
     </div>
   );

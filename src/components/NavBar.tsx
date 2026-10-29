@@ -1,15 +1,18 @@
-import { navStore, openSubView, t, getList } from "@stores";
+import React from "react";
+import { useNavStore, openSubView, t, getList } from "@stores";
 import { drawer } from "@config";
 import { fetchCollection } from "@modules/library";
+import { cn } from "@components/common";
 
 export default function NavBar() {
+  const navStore = useNavStore();
+
   return (
-    <nav class="app-navbar">
+    <nav className="app-navbar">
       <i
         aria-label={t("nav_queue")}
-        class="ri-order-play-fill"
-        classList={{ on: navStore.active === "queue" }}
-        onclick={() => {
+        className={cn("ri-order-play-fill", navStore.active === "queue" && "on")}
+        onClick={() => {
           if (navStore.active === "queue") {
             navStore.queue.ref?.scrollIntoView({ behavior: "smooth" });
           } else {
@@ -20,11 +23,11 @@ export default function NavBar() {
 
       <i
         aria-label={t("nav_search")}
-        class={
-          "ri-search-2-" + (navStore.active === "search" ? "fill" : "line")
-        }
-        classList={{ on: navStore.active === "search" }}
-        onclick={() => {
+        className={cn(
+          "ri-search-2-" + (navStore.active === "search" ? "fill" : "line"),
+          navStore.active === "search" && "on",
+        )}
+        onClick={() => {
           if (navStore.active === "search") {
             navStore.search.ref?.scrollIntoView({ behavior: "smooth" });
           } else {
@@ -35,12 +38,12 @@ export default function NavBar() {
 
       <i
         aria-label={t("nav_library")}
-        class={
+        className={cn(
           "ri-archive-stack-" +
-          (navStore.active === "library" ? "fill" : "line")
-        }
-        classList={{ on: navStore.active === "library" }}
-        onclick={() => {
+            (navStore.active === "library" ? "fill" : "line"),
+          navStore.active === "library" && "on",
+        )}
+        onClick={() => {
           if (navStore.active === "library") {
             navStore.library.ref?.scrollIntoView({ behavior: "smooth" });
           } else {
@@ -51,9 +54,11 @@ export default function NavBar() {
 
       <i
         aria-label={t("nav_list")}
-        class="ri-play-list-2-fill nav-list-btn"
-        classList={{ on: navStore.active === "list" }}
-        onclick={() => {
+        className={cn(
+          "ri-play-list-2-fill nav-list-btn",
+          navStore.active === "list" && "on",
+        )}
+        onClick={() => {
           if (navStore.active === "list") {
             navStore.list.ref?.scrollIntoView({ behavior: "smooth" });
           } else if (drawer.lastList) {

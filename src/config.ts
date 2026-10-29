@@ -1,4 +1,4 @@
-﻿import { createSignal } from "solid-js";
+import { useSyncExternalStore } from "react";
 import { lsGetJSON, lsSetJSON } from "@utils";
 
 export type PanelRatio = "1:1" | "2:3" | "3:4" | "1:2" | "2:5";
@@ -19,7 +19,11 @@ const CACHING_MODES: CachingMode[] = ["auto", "on-demand", "off"];
  * The -motion variants pan the artwork with the playback progress.
  */
 export type PlayerBackground =
-  "none" | "frost" | "frost-motion" | "blur" | "blur-motion";
+  | "none"
+  | "frost"
+  | "frost-motion"
+  | "blur"
+  | "blur-motion";
 
 const PLAYER_BACKGROUNDS: PlayerBackground[] = [
   "none",
@@ -34,7 +38,7 @@ export const VOLUME_PRESETS = [
   0, 0.2, 0.5, 1, 2, 3, 5, 10, 15, 25, 50, 75, 100,
 ];
 
-interface LibrarySections {
+export interface LibrarySections {
   subfeed: boolean;
   featured: boolean;
   listenLater: boolean;
@@ -121,49 +125,86 @@ if (!PLAYER_BACKGROUNDS.includes(config.playerBackground))
 if (config.shareAction !== "play" && config.shareAction !== "watch")
   config.shareAction = "play";
 
+const configListeners = new Set<() => void>();
+let configVersion = 0;
+
+function notifyConfig() {
+  configVersion++;
+  configListeners.forEach((l) => l());
+}
+
+export function useConfig() {
+  useSyncExternalStore(
+    (onStoreChange) => {
+      configListeners.add(onStoreChange);
+      return () => configListeners.delete(onStoreChange);
+    },
+    () => configVersion,
+  );
+  return config;
+}
+
 export function setConfig<K extends keyof AppConfig>(
   key: K,
   val: AppConfig[K],
 ) {
   config[key] = val;
   lsSetJSON("config", config);
+  notifyConfig();
 }
 
-const [librarySections, setLibrarySectionsSignal] =
-  createSignal<LibrarySections>({
-    ...config.librarySections,
-  });
-export { librarySections };
+/* Library sections */
+export function librarySections(): LibrarySections {
+  return config.librarySections;
+}
+
+export function useLibrarySections(): LibrarySections {
+  useConfig();
+  return config.librarySections;
+}
 
 export function setLibrarySection(key: LibrarySectionKey, val: boolean) {
   const updated = {
-    ...librarySections(),
+    ...config.librarySections,
     [key]: val,
   };
-  setLibrarySectionsSignal(updated);
+  config.librarySections = updated;
   setConfig("librarySections", updated);
 }
 
 /* Audio caching */
+export function cachingMode(): CachingMode {
+  return config.cachingMode;
+}
 
-export const [cachingMode, setCachingModeSignal] = createSignal<CachingMode>(
-  config.cachingMode,
-);
+export function useCachingMode(): CachingMode {
+  useConfig();
+  return config.cachingMode;
+}
+
+export function setCachingModeSignal(mode: CachingMode) {
+  if (!CACHING_MODES.includes(mode)) return;
+  config.cachingMode = mode;
+  setConfig("cachingMode", mode);
+}
 
 /* Player artwork background */
+export function playerBackground(): PlayerBackground {
+  return config.playerBackground;
+}
 
-const [playerBackground, setPlayerBackgroundSignal] =
-  createSignal<PlayerBackground>(config.playerBackground);
-export { playerBackground };
+export function usePlayerBackground(): PlayerBackground {
+  useConfig();
+  return config.playerBackground;
+}
 
 export function setPlayerBackground(background: PlayerBackground) {
   if (!PLAYER_BACKGROUNDS.includes(background)) return;
-  setPlayerBackgroundSignal(background);
+  config.playerBackground = background;
   setConfig("playerBackground", background);
 }
 
 /* Transitory local saves thats not supposed to be transferrable */
-
 export let drawer = {
   recentSearches: [] as string[],
   discovery: [] as (YTItem & { frequency: number })[],
@@ -202,4 +243,3 @@ export function setDrawer<K extends keyof AppDrawer>(
   drawer[key] = val;
   lsSetJSON("drawer", drawer);
 }
-

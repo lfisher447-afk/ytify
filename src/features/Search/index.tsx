@@ -1,40 +1,44 @@
-import { onMount, Show, lazy } from "solid-js";
+import React, { useEffect, useRef, Suspense, lazy } from "react";
 import "./Search.css";
 import Results from "./Results";
 import Input from "./Input";
-import { searchStore, t, setNavStore } from "@stores";
+import { useSearchStore, t, setNavStore } from "@stores";
 import Filters from "./Filters";
 import HeaderNav from "@components/HeaderNav";
 import HeaderActions from "@components/HeaderActions";
 
 const About = lazy(() => import("./About"));
 
-export default function () {
-  let searchRef!: HTMLElement;
+export default function SearchFeature() {
+  const searchStore = useSearchStore();
+  const searchRef = useRef<HTMLElement>(null);
 
-  onMount(() => {
-    setNavStore("search", "ref", searchRef);
-    searchRef.scrollIntoView();
-  });
+  useEffect(() => {
+    if (searchRef.current) {
+      setNavStore("search", "ref", searchRef.current);
+      searchRef.current.scrollIntoView();
+    }
+  }, []);
 
   return (
-    <section class="search" ref={searchRef}>
-      <header class="sticky-bar">
+    <section className="search" ref={searchRef}>
+      <header className="sticky-bar">
         <HeaderNav title={<p>{t("nav_search")}</p>} />
         <HeaderActions />
       </header>
 
-      <form class="superInputContainer">
+      <form className="superInputContainer" onSubmit={(e) => e.preventDefault()}>
         <Input />
         <Filters />
       </form>
 
-      <Show
-        when={searchStore.query || searchStore.results.length > 0}
-        fallback={<About />}
-      >
+      {searchStore.query || searchStore.results.length > 0 ? (
         <Results />
-      </Show>
+      ) : (
+        <Suspense fallback={null}>
+          <About />
+        </Suspense>
+      )}
     </section>
   );
 }

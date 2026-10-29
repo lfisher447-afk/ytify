@@ -1,39 +1,37 @@
-import { setConfig, config } from "@config";
+import React, { useState, useRef, Suspense, lazy } from "react";
+import { setConfig, useConfig } from "@config";
 import { CACHED_COLLECTION, getTracksMap } from "@modules/library";
 import { clearOpusCache } from "@modules/audioCache";
 import { setStore, t } from "@stores";
 import { lsGetJSON, lsKeys, lsRemove, lsSetJSON } from "@utils";
-import { createSignal, lazy, Show } from "solid-js";
-import { render } from "solid-js/web";
 import ConfigureModal from "./ConfigureModal";
 
 const Login = lazy(() => import("@components/Login"));
 
 export default function Dropdown() {
-  const [showConfigure, setShowConfigure] = createSignal(false);
-  let detailsRef!: HTMLDetailsElement;
+  const [showConfigure, setShowConfigure] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const config = useConfig();
 
-  async function importLibrary(e: Event) {
-    const importBtn = e.target as HTMLInputElement & { files: FileList };
-    const importedData = JSON.parse(await importBtn.files[0].text());
+  async function importLibrary(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files;
+    if (!files || !files[0]) return;
+    const importedData = JSON.parse(await files[0].text());
 
     if (importedData.meta) {
-      // Check for V2 library
-      // Deconsolidate V2 library
       for (const key in importedData) {
-        if (importedData.hasOwnProperty(key)) {
-          // Device-local: it indexes OPFS audio that never travels with the file.
+        if (Object.prototype.hasOwnProperty.call(importedData, key)) {
           if (key === CACHED_COLLECTION) continue;
           lsSetJSON("library_" + key, importedData[key]);
         }
       }
-      setStore("snackbar", t("library_imported")); // Reusing existing translation key
+      setStore("snackbar", t("library_imported"));
       location.reload();
     } else {
-      // Assume V1 library
       lsSetJSON("library", importedData);
       setStore("snackbar", t("library_migration_v1_v2"));
-      location.reload(); // Trigger migration
+      location.reload();
     }
   }
 
@@ -45,7 +43,6 @@ export default function Dropdown() {
     const exportedData: { [key: string]: any } = {};
     for (const key of lsKeys("library_")) {
       const name = key.slice(8);
-      // Device-local: the cached ids point at audio absent on any other device.
       if (name === CACHED_COLLECTION) continue;
       exportedData[name] = lsGetJSON(key, null);
     }
@@ -55,20 +52,14 @@ export default function Dropdown() {
   }
 
   async function cleanLibrary() {
-    // Count items in V2 library
-    let count = 0;
     const tracksMap = getTracksMap();
-    count = Object.keys(tracksMap).length;
+    const count = Object.keys(tracksMap).length;
 
     if (confirm(t("library_clean_prompt", count.toString()))) {
-      // Remove all V2 library_ keys
       for (const key of lsKeys("library")) {
         lsRemove(key);
       }
-
-      // Cached audio lives in OPFS, which a localStorage wipe does not touch.
       await clearOpusCache();
-
       location.reload();
     }
   }
@@ -77,87 +68,98 @@ export default function Dropdown() {
     <>
       <details ref={detailsRef}>
         <summary>
-          <i aria-label="More Options" class="ri-more-2-fill"></i>
+          <i aria-label="More Options" className="ri-more-2-fill"></i>
         </summary>
         <ul>
           <li
-            onclick={() => {
-              detailsRef?.removeAttribute("open");
+            onClick={() => {
+              detailsRef.current?.removeAttribute("open");
               setShowConfigure(true);
             }}
           >
-            <i class="ri-archive-stack-line"></i>&nbsp;{t("library_configure")}
+            <i className="ri-archive-stack-line"></i>&nbsp;{t("library_configure")}
           </li>
-          <li onclick={() => document.getElementById("upload_ytify")?.click()}>
+          <li onClick={() => document.getElementById("upload_ytify")?.click()}>
             <label>
-              <i class="ri-import-line"></i>&nbsp;{t("library_import")}
+              <i className="ri-import-line"></i>&nbsp;{t("library_import")}
             </label>
-            <input type="file" id="upload_ytify" onchange={importLibrary} />
+            <input
+              type="file"
+              id="upload_ytify"
+              style={{ display: "none" }}
+              onChange={importLibrary}
+            />
           </li>
-          <li id="exportBtn" onclick={exportLibrary}>
-            <i class="ri-export-line"></i>&nbsp;{t("library_export")}
+          <li id="exportBtn" onClick={exportLibrary}>
+            <i className="ri-export-line"></i>&nbsp;{t("library_export")}
           </li>
-          <li id="cleanLibraryBtn" onclick={() => cleanLibrary()}>
-            <i class="ri-delete-bin-2-line"></i>&nbsp;{t("library_clean")}
+          <li id="cleanLibraryBtn" onClick={() => cleanLibrary()}>
+            <i className="ri-delete-bin-2-line"></i>&nbsp;{t("library_clean")}
           </li>
 
           <li
-            onclick={() => document.getElementById("upload_songshift")?.click()}
+            onClick={() => document.getElementById("upload_songshift")?.click()}
           >
             <label>
-              <i class="ri-refresh-line"></i>&nbsp;Import Playlists from
+              <i className="ri-refresh-line"></i>&nbsp;Import Playlists from
               SongShift
             </label>
             <input
               type="file"
               id="upload_songshift"
-              onchange={async (e) =>
-                (await import("@modules/importSongshiftStreams")).default(
-                  e.target.files![0],
-                )
-              }
+              style={{ display: "none" }}
+              onChange={async (e) => {
+                if (e.target.files?.[0]) {
+                  (await import("@modules/importSongshiftStreams")).default(
+                    e.target.files[0],
+                  );
+                }
+              }}
             />
           </li>
 
           <li
             id="importYTPlaylistBtn"
-            onclick={async () => {
-              detailsRef?.removeAttribute("open");
+            onClick={async () => {
+              detailsRef.current?.removeAttribute("open");
               (await import("@modules/importYouTubePlaylist")).default();
             }}
           >
-            <i class="ri-youtube-fill youtube-icon"></i>&nbsp;
+            <i className="ri-youtube-fill youtube-icon"></i>&nbsp;
             {t("library_import_yt_playlist")}
           </li>
 
-          <Show
-            when={config.dbsync}
-            fallback={
-              <li
-                onclick={() => {
-                  render(() => <Login />, document.body);
-                }}
-              >
-                <i class="ri-cloud-fill"></i>&nbsp;Cloud Sync
-              </li>
-            }
-          >
+          {config.dbsync ? (
             <li
-              onclick={async () => {
+              onClick={async () => {
                 const { cleanupSyncState } = await import("@modules/cloudSync");
                 cleanupSyncState();
                 setConfig("dbsync", "");
                 location.reload();
               }}
             >
-              <i class="ri-cloud-fill"></i>&nbsp;Logout
+              <i className="ri-cloud-fill"></i>&nbsp;Logout
             </li>
-          </Show>
+          ) : (
+            <li
+              onClick={() => {
+                detailsRef.current?.removeAttribute("open");
+                setShowLogin(true);
+              }}
+            >
+              <i className="ri-cloud-fill"></i>&nbsp;Cloud Sync
+            </li>
+          )}
         </ul>
       </details>
-      <Show when={showConfigure()}>
+      {showConfigure && (
         <ConfigureModal close={() => setShowConfigure(false)} />
-      </Show>
+      )}
+      {showLogin && (
+        <Suspense fallback={null}>
+          <Login onClose={() => setShowLogin(false)} />
+        </Suspense>
+      )}
     </>
   );
 }

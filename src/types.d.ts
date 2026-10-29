@@ -1,4 +1,4 @@
-import type { JSXElement } from "solid-js";
+import type { ReactNode } from "react";
 import type en from "./locales/en.json";
 
 declare global {
